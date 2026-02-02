@@ -4,31 +4,37 @@ const cors = require("cors");
 
 const { connectToDatabase } = require("./config/database");
 
-// ROUTES
+// ================= ROUTES =================
 const penggunaRoutes = require("./routes/penggunaRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const statistikRoutes = require("./routes/statistikRoutes");
+const statcardRoutes = require("./routes/statcardRoutes");
+const parkirRoutes = require("./routes/parkirRoutes");
 
 const app = express();
 
 /**
  * ================= BASIC APP CONFIG =================
  */
-app.disable("x-powered-by"); // keamanan kecil
-app.set("trust proxy", 1); // kalau nanti pakai proxy
+app.disable("x-powered-by");
 
 /**
  * ================= MIDDLEWARE =================
  */
+
+// ✅ CORS (aman untuk Next.js)
 app.use(
   cors({
-    origin: "*", // sesuaikan jika perlu
+    origin: [
+      "http://localhost:3000", // Next.js
+      "http://127.0.0.1:3000",
+    ],
     methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   }),
 );
 
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 /**
@@ -41,10 +47,9 @@ connectToDatabase();
  */
 app.get("/api/health", (req, res) => {
   res.status(200).json({
-    success: true,
-    status: "OK",
+    status: "success",
     message: "Server & Database aktif",
-    timestamp: new Date().toISOString(),
+    timestamp: new Date(),
   });
 });
 
@@ -52,41 +57,43 @@ app.get("/api/health", (req, res) => {
  * ================= ROUTES =================
  */
 
-// MAHASISWA / PENGGUNA
+// MAHASISWA (LOGIN, REGISTER, PROFIL, RIWAYAT)
 app.use("/api", penggunaRoutes);
-// POST /api/login
-// POST /api/register
 
 // ADMIN
 app.use("/api/admin", adminRoutes);
-// POST /api/admin/login
-// POST /api/admin/rfid
-// dst
 
-// STATISTIK KENDARAAN
+// PARKIR (MASUK & KELUAR)
+app.use("/api/parkir", parkirRoutes);
+// POST /api/parkir/masuk
+// POST /api/parkir/keluar
+
+// STATCARD (DASHBOARD)
+app.use("/api/statcard", statcardRoutes);
+
+// STATISTIK (GRAFIK)
 app.use("/api/statistik", statistikRoutes);
-// GET /api/statistik/kendaraan?periode=harian|mingguan|bulanan
 
 /**
  * ================= 404 HANDLER =================
  */
 app.use((req, res) => {
   res.status(404).json({
-    success: false,
+    status: "error",
     message: "Endpoint tidak ditemukan",
     path: req.originalUrl,
   });
 });
 
 /**
- * ================= ERROR HANDLER =================
+ * ================= GLOBAL ERROR HANDLER =================
  */
 app.use((err, req, res, next) => {
-  console.error("Unhandled Error:", err);
+  console.error("🔥 Server Error:", err);
 
   res.status(err.status || 500).json({
-    success: false,
-    message: err.message || "Terjadi kesalahan pada server",
+    status: "error",
+    message: err.message || "Internal server error",
   });
 });
 
@@ -94,16 +101,6 @@ app.use((err, req, res, next) => {
  * ================= SERVER =================
  */
 const PORT = process.env.PORT || 5000;
-const server = app.listen(PORT, () => {
-  console.log(`🚀 Server aktif di port ${PORT}`);
-});
-
-/**
- * ================= GRACEFUL SHUTDOWN =================
- */
-process.on("SIGINT", () => {
-  console.log("🛑 Server dihentikan");
-  server.close(() => {
-    process.exit(0);
-  });
+app.listen(PORT, () => {
+  console.log(`🚀 Server aktif di http://localhost:${PORT}`);
 });

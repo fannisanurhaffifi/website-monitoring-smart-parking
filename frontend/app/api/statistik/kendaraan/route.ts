@@ -2,14 +2,14 @@ import { NextResponse } from "next/server";
 
 /**
  * GET /api/statistik/kendaraan?periode=harian|mingguan|bulanan
- * MOCK API - FORMAT DISAMAKAN DENGAN BACKEND EXPRESS
+ * Proxy ke Backend Express (DATA ASLI DARI DATABASE)
  */
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const periode = searchParams.get("periode");
 
-    // 1️⃣ Validasi parameter (SAMA dengan BE)
+    // ✅ VALIDASI
     if (!periode || !["harian", "mingguan", "bulanan"].includes(periode)) {
       return NextResponse.json(
         {
@@ -20,43 +20,20 @@ export async function GET(req: Request) {
       );
     }
 
-    // 2️⃣ Mock data (STRUKTUR SAMA DENGAN BE)
-    let labels: string[] = [];
-    let data: number[] = [];
+    // ✅ FETCH KE BACKEND EXPRESS (AMBIL DATA DB)
+    const res = await fetch(
+      `http://localhost:5000/api/statistik/kendaraan?periode=${periode}`,
+      {
+        method: "GET",
+        cache: "no-store", // WAJIB: biar data selalu update
+      },
+    );
 
-    if (periode === "harian") {
-      labels = [
-        "06.00",
-        "07.00",
-        "08.00",
-        "09.00",
-        "10.00",
-        "11.00",
-        "12.00",
-        "13.00",
-        "14.00",
-        "15.00",
-        "16.00",
-        "17.00",
-      ];
-      data = [12, 25, 40, 55, 48, 50, 45, 38, 42, 36, 28, 20];
-    }
+    const data = await res.json();
 
-    if (periode === "mingguan") {
-      labels = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
-      data = [720, 680, 750, 800, 770];
-    }
-
-    if (periode === "bulanan") {
-      labels = ["Jan", "Feb", "Mar", "Apr", "Mei"];
-      data = [2800, 3000, 3200, 3500, 3700];
-    }
-
-    // 3️⃣ Response (IDENTIK dengan BE)
-    return NextResponse.json({
-      success: true,
-      labels,
-      data,
+    // ✅ TERUSKAN RESPONSE APA ADANYA
+    return NextResponse.json(data, {
+      status: res.status,
     });
   } catch (error) {
     console.error("Statistik API Error:", error);

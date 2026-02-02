@@ -15,38 +15,43 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
 type Periode = "harian" | "mingguan" | "bulanan";
 
-export default function StatistikKendaraan() {
+/* 🔑 TAMBAH PROP REFRESH */
+type StatistikKendaraanProps = {
+  refreshKey?: number;
+};
+
+export default function StatistikKendaraan({
+  refreshKey = 0,
+}: StatistikKendaraanProps) {
   const [periode, setPeriode] = useState<Periode>("harian");
   const [labels, setLabels] = useState<string[]>([]);
-  const [data, setData] = useState<number[]>([]);
+  const [values, setValues] = useState<number[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  /**
-   * FETCH DATA STATISTIK DARI BACKEND
-   */
+  /* ================= FETCH DATA ================= */
   useEffect(() => {
     const fetchStatistik = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        const res = await fetch(
-          `http://localhost:5000/api/statistik/kendaraan?periode=${periode}`,
-        );
-
-        if (!res.ok) {
-          throw new Error("Gagal mengambil data statistik");
-        }
+        const res = await fetch(`/api/statistik/kendaraan?periode=${periode}`, {
+          cache: "no-store",
+        });
 
         const result = await res.json();
 
-        if (!result.success) {
-          throw new Error(result.message || "Response tidak valid");
+        if (!res.ok || !result.success) {
+          throw new Error(result.message || "Gagal mengambil data statistik");
+        }
+
+        if (!Array.isArray(result.labels) || !Array.isArray(result.data)) {
+          throw new Error("Format data statistik tidak valid");
         }
 
         setLabels(result.labels);
-        setData(result.data);
+        setValues(result.data);
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -55,14 +60,14 @@ export default function StatistikKendaraan() {
     };
 
     fetchStatistik();
-  }, [periode]);
+  }, [periode, refreshKey]); // 🔥 INI KUNCI AUTO REFRESH
 
   const chartData = {
     labels,
     datasets: [
       {
         label: "Jumlah Kendaraan",
-        data,
+        data: values,
         backgroundColor: "#1F3A93",
         borderRadius: 6,
       },
@@ -96,7 +101,7 @@ export default function StatistikKendaraan() {
 
         {error && <p className="text-center text-xs text-red-500">{error}</p>}
 
-        {!loading && !error && (
+        {!loading && !error && labels.length > 0 && (
           <Bar
             data={chartData}
             options={{
@@ -111,17 +116,6 @@ export default function StatistikKendaraan() {
                 },
               },
               scales: {
-                x: {
-                  title: {
-                    display: true,
-                    text:
-                      periode === "harian"
-                        ? "Waktu (Jam)"
-                        : periode === "mingguan"
-                          ? "Hari"
-                          : "Bulan",
-                  },
-                },
                 y: {
                   beginAtZero: true,
                   title: {
