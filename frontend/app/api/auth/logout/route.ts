@@ -1,28 +1,22 @@
 import { NextResponse } from "next/server";
 
+/**
+ * POST /api/logout
+ * Proxy ke Backend Express
+ */
 export async function POST() {
   try {
-    /**
-     * Karena belum pakai session / JWT,
-     * logout cukup mengembalikan response sukses.
-     * Nanti saat pakai cookie/JWT, logic di sini tinggal ditambah.
-     */
+    const res = await fetch("http://localhost:5000/api/logout", {
+      method: "POST",
+    });
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Logout berhasil",
-        redirect: "/",
-      },
-      { status: 200 },
-    );
+    const data = await res.json();
+    return NextResponse.json(data);
   } catch (error) {
-    console.error("LOGOUT ERROR:", error);
-
     return NextResponse.json(
       {
-        success: false,
-        message: "Terjadi kesalahan server",
+        status: "error",
+        message: "Logout gagal",
       },
       { status: 500 },
     );

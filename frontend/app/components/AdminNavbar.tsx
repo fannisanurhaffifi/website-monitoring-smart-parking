@@ -2,8 +2,31 @@
 
 import Image from "next/image";
 import { UserCog, LogOut } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export default function AdminNavbar() {
+  const router = useRouter();
+
+  // ================= LOGOUT HANDLER =================
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/logout", {
+        method: "POST",
+      });
+
+      // 🔥 Hapus data login admin
+      localStorage.removeItem("admin");
+      localStorage.removeItem("admin_id");
+      // atau jika mau bersih total:
+      // localStorage.clear();
+
+      // 🔁 Redirect ke login di root
+      router.replace("/");
+    } catch (error) {
+      console.error("Logout gagal:", error);
+    }
+  };
+
   return (
     <nav className="w-full border-b border-gray-300 bg-[#1F3A93] text-white">
       {/* ================= TOP BAR ================= */}
@@ -34,7 +57,11 @@ export default function AdminNavbar() {
 
           <button
             type="button"
-            className="flex items-center gap-1 transition-colors hover:text-red-300"
+            onClick={handleLogout}
+            className="
+              flex items-center gap-1
+              transition-colors hover:text-red-300
+            "
           >
             <LogOut className="h-4 w-4 sm:h-5 sm:w-5" />
             <span>Keluar</span>

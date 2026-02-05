@@ -61,18 +61,12 @@ export default function AdminDashboardPage() {
 
   if (loading) {
     return (
-      <div className="p-6 text-sm text-gray-600">
-        Loading dashboard...
-      </div>
+      <div className="p-6 text-sm text-gray-600">Loading dashboard...</div>
     );
   }
 
   if (error) {
-    return (
-      <div className="p-6 text-sm text-red-500">
-        {error}
-      </div>
-    );
+    return <div className="p-6 text-sm text-red-500">{error}</div>;
   }
 
   return (

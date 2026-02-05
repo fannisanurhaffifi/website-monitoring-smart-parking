@@ -7,6 +7,7 @@ const {
   loginPengguna,
   editProfilPengguna,
   riwayatParkirPengguna,
+  logoutPengguna, // ⬅️ TAMBAHKAN INI
 } = require("../controllers/penggunaController");
 
 // ====================================================
@@ -31,6 +32,15 @@ router.post("/register", registerPengguna);
  * ====================================================
  */
 router.post("/login", loginPengguna);
+
+/**
+ * ====================================================
+ * KF-03
+ * Logout pengguna
+ * POST /api/logout
+ * ====================================================
+ */
+router.post("/logout", logoutPengguna);
 
 /**
  * ====================================================

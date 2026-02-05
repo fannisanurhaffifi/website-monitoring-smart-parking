@@ -1,16 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Users, BarChart3, ParkingCircle, LogOut } from "lucide-react";
 
 export default function AdminSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
 
   const isActive = (path: string) =>
     pathname === path
       ? "bg-[#1F3A93] text-white"
       : "text-gray-700 hover:bg-[#1F3A93] hover:text-white";
+
+  // ================= LOGOUT HANDLER =================
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/logout", {
+        method: "POST",
+      });
+
+      // 🔥 HAPUS DATA LOGIN ADMIN
+      localStorage.removeItem("admin");
+      localStorage.removeItem("admin_id");
+
+      // Redirect ke login
+      router.push("/");
+    } catch (error) {
+      console.error("Logout gagal:", error);
+    }
+  };
 
   return (
     <aside className="w-64 bg-[#E9EBEE] p-4">
@@ -51,6 +70,7 @@ export default function AdminSidebar() {
       {/* ===== LOGOUT ===== */}
       <button
         type="button"
+        onClick={handleLogout}
         className="
           flex w-full items-center gap-3 rounded-lg
           bg-red-600 px-4 py-2 text-sm font-semibold text-white

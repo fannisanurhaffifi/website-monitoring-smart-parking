@@ -246,6 +246,25 @@ const riwayatParkirPengguna = async (req, res) => {
 };
 
 /* =====================================================
+ * KF-03 : LOGOUT PENGGUNA
+ * ===================================================== */
+const logoutPengguna = async (req, res) => {
+  try {
+    // Tidak ada session/token yang perlu dihapus
+    return res.status(200).json({
+      status: "success",
+      message: "Logout berhasil",
+    });
+  } catch (error) {
+    console.error("logoutPengguna error:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Gagal logout",
+    });
+  }
+};
+
+/* =====================================================
  * EXPORT
  * ===================================================== */
 module.exports = {
@@ -253,4 +272,5 @@ module.exports = {
   loginPengguna,
   editProfilPengguna,
   riwayatParkirPengguna,
+  logoutPengguna, // ⬅️ TAMBAHKAN
 };

@@ -23,10 +23,9 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // 🔍 Tentukan role
       const isMahasiswa = /^\d+$/.test(identifier);
 
-      // ✅ Endpoint backend Express
+      // Endpoint backend Express
       const endpoint = isMahasiswa
         ? "http://localhost:5000/api/login"
         : "http://localhost:5000/api/admin/login";
@@ -50,7 +49,6 @@ export default function LoginPage() {
         return;
       }
 
-      /* ================== 🔑 PENTING ================== */
       if (isMahasiswa) {
         // ✅ SIMPAN NPM UNTUK DIGUNAKAN HALAMAN LAIN
         localStorage.setItem("npm", data.data.npm);
@@ -59,7 +57,6 @@ export default function LoginPage() {
       } else {
         router.push("/admin");
       }
-      /* ================================================= */
     } catch (error) {
       console.error("Login Error:", error);
       alert("Gagal terhubung ke server");
