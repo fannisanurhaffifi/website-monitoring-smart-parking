@@ -1,5 +1,6 @@
 const { query } = require("../config/database");
 const PDFDocument = require("pdfkit");
+const { sendVerificationEmail } = require("../utils/email");
 
 /**
  * =========================
@@ -53,45 +54,61 @@ const loginAdmin = async (req, res) => {
 
 /**
  * =========================
- * KF-03: AKTIF / BLOKIR HAK PARKIR
+ * KF-03: VERIFIKASI AKUN PENGGUNA
  * =========================
  * status_akun:
- * 1 = boleh parkir
- * 0 = diblokir parkir (login tetap bisa)
+ * 0 = belum diverifikasi
+ * 1 = aktif (boleh login & parkir)
  */
 const verifikasiPengguna = async (req, res) => {
   try {
-    const { npm, status_akun } = req.body;
+    const { npm } = req.body;
 
-    if (!npm || typeof status_akun !== "number") {
+    if (!npm) {
       return res.status(400).json({
         status: "error",
-        message: "NPM dan status akun wajib diisi",
+        message: "NPM wajib diisi",
       });
     }
 
-    const result = await query(
-      "UPDATE pengguna SET status_akun = ? WHERE npm = ?",
-      [status_akun, npm]
+    const user = await query(
+      "SELECT email, status_akun FROM pengguna WHERE npm = ?",
+      [npm]
     );
 
-    if (result.affectedRows === 0) {
+    if (user.length === 0) {
       return res.status(404).json({
         status: "error",
         message: "Pengguna tidak ditemukan",
       });
     }
 
+    if (user[0].status_akun === 1) {
+      return res.status(400).json({
+        status: "error",
+        message: "Akun sudah diverifikasi",
+      });
+    }
+
+    // Aktifkan akun
+    await query(
+      "UPDATE pengguna SET status_akun = 1 WHERE npm = ?",
+      [npm]
+    );
+
+    // Kirim email notifikasi
+    await sendVerificationEmail(user[0].email);
+
     return res.status(200).json({
       status: "success",
-      message:
-        status_akun === 1
-          ? "Hak parkir pengguna diaktifkan"
-          : "Hak parkir pengguna diblokir",
+      message: "Akun berhasil diverifikasi dan email telah dikirim",
     });
   } catch (err) {
     console.error("verifikasiPengguna:", err);
-    return res.status(500).json({ status: "error", message: "Server error" });
+    return res.status(500).json({
+      status: "error",
+      message: "Server error",
+    });
   }
 };
 

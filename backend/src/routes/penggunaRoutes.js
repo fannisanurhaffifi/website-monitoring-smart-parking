@@ -5,6 +5,7 @@ const router = express.Router();
 const {
   registerPengguna,
   loginPengguna,
+  logoutPengguna,
   editProfilPengguna,
   riwayatParkirPengguna,
 } = require("../controllers/penggunaController");
@@ -31,6 +32,7 @@ router.post("/register", registerPengguna);
  * ====================================================
  */
 router.post("/login", loginPengguna);
+router.post("/logout", logoutPengguna);
 
 /**
  * ====================================================

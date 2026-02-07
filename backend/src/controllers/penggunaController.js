@@ -60,7 +60,7 @@ const registerPengguna = async (req, res) => {
         angkatan,
         foto || null,
         password, // ⚠️ plain password
-        1, // aktif (atau 0 jika pakai verifikasi admin)
+        0, // aktif (atau 0 jika pakai verifikasi admin)
         tanggal_daftar,
       ],
     );
@@ -87,7 +87,7 @@ const registerPengguna = async (req, res) => {
 };
 
 /* =====================================================
- * KF-02 : LOGIN PENGGUNA
+ * KF-02 : LOGIN dan LOG OUT PENGGUNA
  * ===================================================== */
 const loginPengguna = async (req, res) => {
   try {
@@ -144,6 +144,22 @@ const loginPengguna = async (req, res) => {
     });
   } catch (error) {
     console.error("loginPengguna error:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+    });
+  }
+};
+
+// LOG OUT
+const logoutPengguna = async (req, res) => {
+  try {
+    return res.status(200).json({
+      status: "success",
+      message: "Logout berhasil",
+    });
+  } catch (error) {
+    console.error("logoutPengguna error:", error);
     return res.status(500).json({
       status: "error",
       message: "Internal server error",
@@ -253,4 +269,5 @@ module.exports = {
   loginPengguna,
   editProfilPengguna,
   riwayatParkirPengguna,
+  logoutPengguna,
 };

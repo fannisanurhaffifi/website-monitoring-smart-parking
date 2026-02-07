@@ -9,8 +9,7 @@ const penggunaRoutes = require("./routes/penggunaRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const statistikRoutes = require("./routes/statistikRoutes");
 const parkirRoutes = require("./routes/parkirRoutes");
-const statcardRoutes = require("./routes/statcardRoutes"); // ✅ TAMBAHAN PENTING
-
+const statcardRoutes = require("./routes/statcardRoutes"); 
 const app = express();
 
 /**
@@ -51,11 +50,15 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+app.use((req, res, next) => {
+  console.log("➡️ HIT:", req.method, req.originalUrl);
+  next();
+});
 /**
  * ================= ROUTES =================
  */
 
-// MAHASISWA (login, register, profil, riwayat)
+// MAHASISWA (login,logout, register, profil, riwayat)
 app.use("/api", penggunaRoutes);
 
 // ADMIN (login, verifikasi, RFID, dashboard, tabel parkir)
