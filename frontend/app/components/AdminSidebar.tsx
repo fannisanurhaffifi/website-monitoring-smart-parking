@@ -39,7 +39,7 @@ export default function AdminSidebar() {
         <SidebarItem
           href="/admin"
           icon={<BarChart3 size={18} />}
-          label="Dashboard"
+          label="Beranda"
           active={isActive("/admin")}
         />
 

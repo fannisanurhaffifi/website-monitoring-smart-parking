@@ -41,7 +41,10 @@ export default function Navbar() {
       {/* ================= TOP BAR ================= */}
       <div className="flex items-center justify-between px-4 py-3 sm:px-6">
         {/* LEFT */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <Link
+          href="/mahasiswa"
+          className="flex items-center gap-2 sm:gap-3 hover:opacity-90 transition-opacity group"
+        >
           <Image
             src="/logo-unila.png"
             alt="Logo Sistem Monitoring Parkir"
@@ -50,11 +53,11 @@ export default function Navbar() {
             className="h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12"
             priority
           />
-          <div className="text-xs font-semibold leading-tight sm:text-sm lg:text-base">
+          <div className="text-xs font-semibold leading-tight sm:text-sm lg:text-base group-hover:text-blue-200 transition-colors">
             Sistem Monitoring Parkir <br />
             Teknik Geodesi
           </div>
-        </div>
+        </Link>
 
         {/* RIGHT */}
         <div className="flex items-center gap-3 text-xs sm:gap-6 sm:text-sm">

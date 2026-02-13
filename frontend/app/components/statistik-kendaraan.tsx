@@ -116,11 +116,34 @@ export default function StatistikKendaraan({
                 },
               },
               scales: {
+                x: {
+                  ticks: {
+                    font: {
+                      size: 11, // Ukuran font lebih besar
+                      weight: "bold",
+                    },
+                    color: "#374151", // Gray-700
+                  },
+                  grid: {
+                    display: false, // Menghilangkan garis vertikal agar lebih bersih
+                  },
+                },
                 y: {
                   beginAtZero: true,
+                  suggestedMax: 100, // Menentukan batas atas yang disarankan (puluhan/ratusan)
                   title: {
                     display: true,
                     text: "Jumlah Kendaraan",
+                    font: {
+                      size: 12,
+                      weight: "bold",
+                    },
+                  },
+                  ticks: {
+                    stepSize: 10, // Skala naik per 10 (0, 10, 20, ...)
+                    font: {
+                      size: 11,
+                    }
                   },
                 },
               },

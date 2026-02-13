@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { UserCog, LogOut, Menu, X, BarChart3, Users, ParkingCircle } from "lucide-react";
+import { UserCog, Menu, X, BarChart3, Users, ParkingCircle } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 
@@ -18,8 +18,8 @@ export default function AdminNavbar() {
 
   useEffect(() => {
     const handleResize = () => {
-      // Auto close drawer if screen becomes large enough (desktop mode)
-      if (window.innerWidth >= 640) {
+      // Auto close drawer if screen becomes large enough (desktop mode >= 768px)
+      if (window.innerWidth >= 768) {
         setIsOpen(false);
       }
     };
@@ -27,15 +27,10 @@ export default function AdminNavbar() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const handleLogout = async () => {
-    await fetch("/api/logout", { method: "POST" });
-    localStorage.removeItem("admin");
-    localStorage.removeItem("admin_id");
-    router.replace("/");
-  };
+
 
   const menuItems = [
-    { href: "/admin", icon: <BarChart3 size={20} />, label: "Dashboard" },
+    { href: "/admin", icon: <BarChart3 size={20} />, label: "Beranda" },
     {
       href: "/admin/statistik-pengguna",
       icon: <BarChart3 size={20} />,
@@ -61,9 +56,9 @@ export default function AdminNavbar() {
         <div className="flex items-center gap-3">
 
           {/* HAMBURGER MENU BUTTON */}
-          {/* HANYA MUNCUL DI LAYAR SANGAT KECIL (MOBILE < 640px) */}
+          {/* HANYA MUNCUL DI LAYAR SANGAT KECIL (MOBILE < 768px / md) */}
           <button
-            className="block sm:hidden p-1 rounded hover:bg-[#344FA0] transition"
+            className="block md:hidden p-1 rounded hover:bg-[#344FA0] transition"
             onClick={() => setIsOpen(!isOpen)}
             aria-label="Toggle Menu"
           >
@@ -91,20 +86,12 @@ export default function AdminNavbar() {
             <UserCog size={18} />
             <span>Admin</span>
           </div>
-
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 hover:text-red-300 transition"
-          >
-            <LogOut size={18} />
-            Keluar
-          </button>
         </div>
       </div>
 
-      {/* MOBILE DRAWER (sm hidden) */}
+      {/* MOBILE DRAWER (md hidden) */}
       {isOpen && (
-        <div className="sm:hidden absolute top-full left-0 w-full bg-white text-black shadow-lg border-b py-4 px-4 flex flex-col gap-2 animate-in slide-in-from-top-2">
+        <div className="md:hidden absolute top-full left-0 w-full bg-white text-black shadow-lg border-b py-4 px-4 flex flex-col gap-2 animate-in slide-in-from-top-2">
 
           <div className="flex items-center gap-2 px-4 py-2 mb-2 text-sm text-gray-600 bg-gray-50 rounded-lg">
             <UserCog size={16} />
@@ -126,16 +113,6 @@ export default function AdminNavbar() {
               {item.label}
             </Link>
           ))}
-
-          <hr className="my-2 border-gray-100" />
-
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition w-full text-left"
-          >
-            <LogOut size={20} />
-            Keluar
-          </button>
         </div>
       )}
     </nav>
