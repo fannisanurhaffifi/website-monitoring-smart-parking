@@ -65,6 +65,7 @@ export default function LoginPage() {
         // ✅ SIMPAN TOKEN / DATA UNTUK ADMIN
         if (data.data && data.data.nama) {
           localStorage.setItem("admin_nama", data.data.nama);
+          localStorage.setItem("id_admin", data.data.id_admin);
         }
         router.push("/admin");
       }

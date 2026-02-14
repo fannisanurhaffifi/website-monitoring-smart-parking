@@ -11,6 +11,7 @@ const {
   exportParkirPDF,
   hapusPengguna,
   updateKuotaParkir,
+  updateSlotParkir,
 } = require("../controllers/adminController");
 
 /**
@@ -58,6 +59,9 @@ router.post("/rfid/generate", generateRFID);
 
 // SUMMARY DASHBOARD
 router.get("/dashboard/summary", dashboardSummary);
+
+// UPDATE SLOT PARKIR
+router.put("/slot", updateSlotParkir);
 
 /**
  * ====================================================

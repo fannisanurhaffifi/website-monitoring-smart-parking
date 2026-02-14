@@ -65,19 +65,21 @@ export default function AdminNavbar() {
             {isOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
 
-          <Image
-            src="/logo-unila.png"
-            alt="Logo Sistem Monitoring Parkir"
-            width={44}
-            height={44}
-            className="h-8 w-8 sm:h-10 sm:w-10"
-            priority
-          />
+          <Link href="/admin" className="flex items-center gap-3 hover:opacity-80 transition">
+            <Image
+              src="/logo-unila.png"
+              alt="Logo Sistem Monitoring Parkir"
+              width={44}
+              height={44}
+              className="h-8 w-8 sm:h-10 sm:w-10"
+              priority
+            />
 
-          <div className="text-xs font-semibold leading-tight sm:text-sm">
-            Sistem Monitoring Parkir <br />
-            Teknik Geodesi
-          </div>
+            <div className="text-xs font-semibold leading-tight sm:text-sm">
+              Sistem Monitoring Parkir <br />
+              Teknik Geodesi
+            </div>
+          </Link>
         </div>
 
         {/* RIGHT SECTION - DESKTOP ONLY (sm+) */}

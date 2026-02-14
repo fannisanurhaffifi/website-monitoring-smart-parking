@@ -37,6 +37,7 @@ export default function PenggunaParkirAdminPage() {
             <option value="aktif">Aktif</option>
             <option value="menunggu">Menunggu Validasi</option>
             <option value="diblokir">Diblokir</option>
+            <option value="ditolak">Ditolak</option>
           </select>
         </div>
       </section>

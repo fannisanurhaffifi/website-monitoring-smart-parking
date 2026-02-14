@@ -80,4 +80,35 @@ const sendRegistrationPendingEmail = async (toEmail, nama) => {
     }
 };
 
-module.exports = { sendVerificationEmail, sendRegistrationPendingEmail };
+const sendRejectionEmail = async (toEmail, nama, alasan = "Data tidak valid atau dokumen tidak lengkap.") => {
+    try {
+        if (!toEmail || toEmail.trim() === "") {
+            throw new Error("Email penerima tidak valid atau kosong");
+        }
+
+        console.log("Mengirim email penolakan ke:", toEmail);
+
+        const info = await transporter.sendMail({
+            from: `"Smart Parking" <${process.env.EMAIL_USER}>`,
+            to: toEmail,
+            subject: "Pendaftaran Akun Ditolak",
+            html: `
+        <h3>Halo ${nama},</h3>
+        <p>Mohon maaf, pendaftaran akun Anda di sistem Smart Parking telah <strong>Ditolak</strong>.</p>
+        <p><strong>Alasan:</strong> ${alasan}</p>
+        <p>Silakan hubungi admin atau lakukan pendaftaran ulang dengan data yang benar.</p>
+      `,
+        });
+
+        console.log("✅ Email penolakan dikirim:", info.messageId);
+        return info;
+    } catch (error) {
+        console.error("❌ Gagal mengirim email penolakan:", error.message);
+    }
+};
+
+module.exports = {
+    sendVerificationEmail,
+    sendRegistrationPendingEmail,
+    sendRejectionEmail
+};

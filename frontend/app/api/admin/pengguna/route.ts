@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 
 const BE_URL = `${process.env.NEXT_PUBLIC_API_URL}/api/admin/pengguna`;
 
-export async function GET() {
+export async function GET(req: Request) {
     try {
-        const res = await fetch(BE_URL, {
+        const { searchParams } = new URL(req.url);
+        const res = await fetch(`${BE_URL}?${searchParams.toString()}`, {
             cache: "no-store",
         });
 

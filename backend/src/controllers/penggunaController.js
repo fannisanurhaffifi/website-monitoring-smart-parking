@@ -49,6 +49,12 @@ const registerPengguna = async (req, res) => {
       [npm, plat_nomor, stnk]
     );
 
+    // ✅ LANGSUNG DAPAT KUOTA 30 SAAT DAFTAR
+    await connection.query(
+      "INSERT INTO kuota_parkir (npm, batas_parkir, jumlah_terpakai) VALUES (?, 30, 0)",
+      [npm]
+    );
+
     await connection.commit();
 
     // kirim email notifikasi (tidak menggagalkan registrasi jika error)
@@ -119,6 +125,20 @@ const loginPengguna = async (req, res) => {
         status: "error",
         message: "NPM atau password salah",
       });
+    }
+
+    // ✅ JARING PENGAMAN: PASTIKAN USER PUNYA KUOTA SAAT LOGIN
+    const existingKuota = await query(
+      "SELECT id_kuota FROM kuota_parkir WHERE npm = ? LIMIT 1",
+      [user.npm]
+    );
+
+    if (existingKuota.length === 0) {
+      await query(
+        "INSERT INTO kuota_parkir (npm, batas_parkir, jumlah_terpakai) VALUES (?, 30, 0)",
+        [user.npm]
+      );
+      console.log(`✅ Kuota awal 30 diberikan otomatis saat login untuk NPM ${user.npm}`);
     }
 
     return res.status(200).json({

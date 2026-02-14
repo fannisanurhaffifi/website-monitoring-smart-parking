@@ -1,6 +1,6 @@
 const { query } = require("../config/database");
 const PDFDocument = require("pdfkit");
-const { sendVerificationEmail } = require("../utils/email");
+const { sendVerificationEmail, sendRejectionEmail } = require("../utils/email");
 
 /* =====================================================
    LOGIN ADMIN
@@ -61,7 +61,7 @@ const verifikasiPengguna = async (req, res) => {
     }
 
     const user = await query(
-      "SELECT email, status_akun FROM pengguna WHERE npm = ?",
+      "SELECT email, nama, status_akun FROM pengguna WHERE npm = ?",
       [npm]
     );
 
@@ -79,6 +79,20 @@ const verifikasiPengguna = async (req, res) => {
 
     // Kirim email verifikasi jika diaktifkan (status_akun === 1)
     if (status_akun === 1) {
+      // ✅ JARING PENGAMAN: PASTIKAN USER PUNYA KUOTA (Jika belum ada)
+      const existingKuota = await query(
+        "SELECT id_kuota FROM kuota_parkir WHERE npm = ? LIMIT 1",
+        [npm]
+      );
+
+      if (existingKuota.length === 0) {
+        await query(
+          "INSERT INTO kuota_parkir (npm, batas_parkir, jumlah_terpakai) VALUES (?, 30, 0)",
+          [npm]
+        );
+        console.log(`✅ Kuota awal 30 diberikan untuk NPM ${npm}`);
+      }
+
       try {
         await sendVerificationEmail(user[0].email);
       } catch (emailErr) {
@@ -86,9 +100,22 @@ const verifikasiPengguna = async (req, res) => {
       }
     }
 
+    // Kirim email penolakan jika ditolak (status_akun === 3)
+    if (status_akun === 3) {
+      try {
+        await sendRejectionEmail(user[0].email, user[0].nama || "Mahasiswa");
+      } catch (emailErr) {
+        console.error("Email penolakan gagal:", emailErr.message);
+      }
+    }
+
+    let successMessage = "Status akun diperbarui";
+    if (status_akun === 1) successMessage = "Akun berhasil diverifikasi";
+    if (status_akun === 3) successMessage = "Pendaftaran berhasil ditolak";
+
     return res.status(200).json({
       status: "success",
-      message: status_akun === 1 ? "Akun berhasil diverifikasi" : "Status akun diperbarui",
+      message: successMessage,
     });
 
   } catch (err) {
@@ -241,106 +268,95 @@ const hapusPengguna = async (req, res) => {
 ===================================================== */
 const generateRFID = async (req, res) => {
   try {
-    const { id_kendaraan, kode_rfid, id_admin } = req.body;
+    console.log("📥 generateRFID BODY:", req.body);
 
-    /* ===============================
-       MODE 1 → ADMIN MULAI REGISTRASI
-    =============================== */
-    if (id_kendaraan && id_admin && !kode_rfid) {
-
-      // validasi kendaraan
-      const kendaraan = await query(
-        "SELECT id_kendaraan FROM kendaraan WHERE id_kendaraan = ?",
-        [id_kendaraan]
-      );
-
-      if (kendaraan.length === 0) {
-        return res.status(404).json({
-          status: "error",
-          message: "Kendaraan tidak ditemukan"
-        });
-      }
-
-      // expire dalam 60 detik
-      await query(`
-        INSERT INTO rfid_registration_session
-        (id_kendaraan, id_admin, expired_at)
-        VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 60 SECOND))
-      `, [id_kendaraan, id_admin]);
-
-      return res.json({
-        status: "success",
-        message: "Silakan scan kartu dalam 60 detik"
+    if (!req.body) {
+      return res.status(400).json({
+        status: "error",
+        message: "Request body tidak ditemukan atau kosong"
       });
     }
 
-    /* ===============================
-       MODE 2 → ARDUINO KIRIM UID
-    =============================== */
-    if (kode_rfid) {
+    const { id_kendaraan, kode_rfid, id_admin } = req.body;
 
-      // cari session aktif
-      const session = await query(`
-        SELECT * FROM rfid_registration_session
-        WHERE status = 'PENDING'
-          AND expired_at > NOW()
-        ORDER BY id_session DESC
-        LIMIT 1
-      `);
-
-      if (session.length === 0) {
-        return res.json({
-          status: "error",
-          message: "Tidak ada sesi registrasi aktif atau sudah expired"
-        });
-      }
-
-      const { id_kendaraan, id_session } = session[0];
-
-      // cek apakah RFID sudah dipakai
+    /* ==============================================
+       MODE 1: MANAJEMEN MANUAL (Web Admin)
+       Admin mengisi id_kendaraan DAN kode_rfid sekaligus.
+       Langsung update tanpa sesi.
+    ============================================== */
+    if (id_kendaraan && kode_rfid) {
+      // cek apakah RFID sudah dipakai kendaraan lain
       const existing = await query(
-        "SELECT id_rfid FROM rfid WHERE kode_rfid = ?",
-        [kode_rfid]
+        "SELECT id_kendaraan FROM rfid WHERE kode_rfid = ? AND id_kendaraan != ?",
+        [kode_rfid, id_kendaraan]
       );
 
       if (existing.length > 0) {
-        return res.json({
-          status: "error",
-          message: "RFID sudah digunakan"
-        });
+        return res.status(400).json({ status: "error", message: "RFID sudah digunakan kendaraan lain" });
       }
 
       // insert / update RFID
-      const current = await query(
-        "SELECT id_rfid FROM rfid WHERE id_kendaraan = ?",
-        [id_kendaraan]
-      );
+      const current = await query("SELECT id_rfid FROM rfid WHERE id_kendaraan = ?", [id_kendaraan]);
 
       if (current.length > 0) {
-        await query(
-          "UPDATE rfid SET kode_rfid = ?, tanggal_aktif = NOW() WHERE id_kendaraan = ?",
-          [kode_rfid, id_kendaraan]
-        );
+        await query("UPDATE rfid SET kode_rfid = ?, tanggal_aktif = NOW() WHERE id_kendaraan = ?", [kode_rfid, id_kendaraan]);
       } else {
-        await query(
-          `INSERT INTO rfid
-           (id_kendaraan, kode_rfid, status_rfid, tanggal_aktif)
-           VALUES (?, ?, 1, NOW())`,
-          [id_kendaraan, kode_rfid]
-        );
+        await query("INSERT INTO rfid (id_kendaraan, kode_rfid, status_rfid, tanggal_aktif) VALUES (?, ?, 1, NOW())", [id_kendaraan, kode_rfid]);
       }
 
-      // update session jadi DONE
-      await query(
-        "UPDATE rfid_registration_session SET status = 'DONE' WHERE id_session = ?",
-        [id_session]
-      );
+      return res.json({ status: "success", message: "RFID berhasil diperbarui secara manual" });
+    }
 
-      return res.json({
-        status: "success",
-        message: "RFID berhasil didaftarkan",
-        data: { kode_rfid }
-      });
+    /* ==============================================
+       MODE 2: ADMIN MULAI SESI (Web Admin)
+       Admin hanya mengisi id_kendaraan & id_admin.
+       Membuka jendela waktu 60 detik untuk Alat.
+    ============================================== */
+    if (id_kendaraan && id_admin && !kode_rfid) {
+      // validasi kendaraan
+      const kendaraan = await query("SELECT id_kendaraan FROM kendaraan WHERE id_kendaraan = ?", [id_kendaraan]);
+      if (kendaraan.length === 0) {
+        return res.status(404).json({ status: "error", message: "Kendaraan tidak ditemukan" });
+      }
+
+      await query(`
+        INSERT INTO rfid_registration_session (id_kendaraan, id_admin, expired_at)
+        VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 60 SECOND))
+      `, [id_kendaraan, id_admin]);
+
+      return res.json({ status: "success", message: "Mode scan otomatis aktif. Silakan scan kartu dalam 60 detik." });
+    }
+
+    /* ==============================================
+       MODE 3: ALAT KIRIM SCAN (Hardware)
+       Hanya mengirim kode_rfid tanpa id_kendaraan.
+       Mencari sesi aktif di database.
+    ============================================== */
+    if (kode_rfid && !id_kendaraan) {
+      const session = await query(`
+        SELECT * FROM rfid_registration_session
+        WHERE status = 'PENDING' AND expired_at > NOW()
+        ORDER BY id_session DESC LIMIT 1
+      `);
+
+      if (session.length === 0) {
+        return res.status(400).json({ status: "error", message: "Tidak ada sesi scan aktif" });
+      }
+
+      const { id_kendaraan: targetId, id_session } = session[0];
+
+      // Update RFID
+      const current = await query("SELECT id_rfid FROM rfid WHERE id_kendaraan = ?", [targetId]);
+      if (current.length > 0) {
+        await query("UPDATE rfid SET kode_rfid = ?, tanggal_aktif = NOW() WHERE id_kendaraan = ?", [kode_rfid, targetId]);
+      } else {
+        await query("INSERT INTO rfid (id_kendaraan, kode_rfid, status_rfid, tanggal_aktif) VALUES (?, ?, 1, NOW())", [targetId, kode_rfid]);
+      }
+
+      // Tutup Sesi
+      await query("UPDATE rfid_registration_session SET status = 'DONE' WHERE id_session = ?", [id_session]);
+
+      return res.json({ status: "success", message: "RFID berhasil didaftarkan otomatis via alat", data: { kode_rfid } });
     }
 
     return res.status(400).json({
@@ -349,10 +365,15 @@ const generateRFID = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("generateRFID:", err);
+    console.error("🔥 generateRFID Error Details:", {
+      message: err.message,
+      sql: err.sql,
+      stack: err.stack
+    });
     return res.status(500).json({
       status: "error",
-      message: "Server error"
+      message: "Server error",
+      details: err.message
     });
   }
 };
@@ -362,26 +383,31 @@ const generateRFID = async (req, res) => {
 ===================================================== */
 const dashboardSummary = async (req, res) => {
   try {
-    const [[slot], [terisi], [aktif], [kuota]] = await Promise.all([
+    const [slotResults, terisiResults, aktifResults, kuotaResults] = await Promise.all([
       query("SELECT COALESCE(SUM(jumlah),0) AS total FROM slot_parkir"),
       query("SELECT COUNT(*) AS total FROM log_parkir WHERE status_parkir='MASUK'"),
       query("SELECT COUNT(*) AS total FROM pengguna WHERE status_akun=1"),
       query("SELECT batas_parkir FROM kuota_parkir WHERE npm IS NULL ORDER BY id_kuota DESC LIMIT 1"),
     ]);
 
+    const total_slot = slotResults[0]?.total || 0;
+    const terisi = terisiResults[0]?.total || 0;
+    const pengguna_aktif = aktifResults[0]?.total || 0;
+    const kuota_global = kuotaResults[0]?.batas_parkir || 0;
+
     return res.status(200).json({
       status: "success",
       data: {
-        total_slot: slot.total,
-        terisi: terisi.total,
-        tersedia: slot.total - terisi.total,
-        pengguna_aktif: aktif.total,
-        kuota_global: kuota ? kuota.batas_parkir : 0,
+        total_slot,
+        terisi,
+        tersedia: Math.max(total_slot - terisi, 0),
+        pengguna_aktif,
+        kuota_global,
       },
     });
 
   } catch (err) {
-    console.error("dashboardSummary:", err);
+    console.error("🔥 dashboardSummary ERROR:", err);
     return res.status(500).json({
       status: "error",
       message: "Server error",
@@ -565,6 +591,50 @@ const updateKuotaParkir = async (req, res) => {
   }
 };
 
+/* =====================================================
+   UPDATE SLOT PARKIR (TOTAL)
+===================================================== */
+const updateSlotParkir = async (req, res) => {
+  try {
+    const { jumlah, id_admin } = req.body;
+
+    if (jumlah === undefined) {
+      return res.status(400).json({
+        status: "error",
+        message: "Jumlah slot wajib diisi",
+      });
+    }
+
+    // Cek apakah sudah ada baris di slot_parkir
+    const rows = await query("SELECT id_slot FROM slot_parkir LIMIT 1");
+
+    if (rows.length > 0) {
+      // UPDATE
+      await query(
+        "UPDATE slot_parkir SET jumlah = ?, id_admin = ? WHERE id_slot = ?",
+        [jumlah, id_admin || null, rows[0].id_slot]
+      );
+    } else {
+      // INSERT
+      await query(
+        "INSERT INTO slot_parkir (jumlah, id_admin) VALUES (?, ?)",
+        [jumlah, id_admin || null]
+      );
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Jumlah slot parkir berhasil diperbarui",
+    });
+  } catch (err) {
+    console.error("updateSlotParkir:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Server error",
+    });
+  }
+};
+
 module.exports = {
   loginAdmin,
   verifikasiPengguna,
@@ -575,5 +645,6 @@ module.exports = {
   getDataParkir,
   exportParkirPDF,
   updateKuotaParkir,
+  updateSlotParkir,
 };
 

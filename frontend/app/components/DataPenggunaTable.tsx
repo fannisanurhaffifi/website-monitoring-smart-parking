@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Check, Ban, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { Check, X, Ban, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 
 type User = {
   npm: string;
@@ -44,7 +44,10 @@ export default function DataPenggunaTable({
 
       // Convert status text to number for backend
       if (statusFilter) {
-        const val = statusFilter === "aktif" ? "1" : statusFilter === "diblokir" ? "2" : "0";
+        const val =
+          statusFilter === "aktif" ? "1" :
+            statusFilter === "diblokir" ? "2" :
+              statusFilter === "ditolak" ? "3" : "0";
         params.append("status", val);
       }
 
@@ -79,11 +82,11 @@ export default function DataPenggunaTable({
   }, [page, limit, search, statusFilter]);
 
   const updateStatus = async (npm: string, status: number) => {
-    const confirm = window.confirm(
-      status === 1
-        ? "Aktifkan hak parkir pengguna ini?"
-        : "Blokir hak parkir pengguna ini?"
-    );
+    let message = "Aktifkan hak parkir pengguna ini?";
+    if (status === 2) message = "Blokir hak parkir pengguna ini?";
+    if (status === 3) message = "Tolak pendaftaran pengguna ini?";
+
+    const confirm = window.confirm(message);
     if (!confirm) return;
 
     try {
@@ -205,7 +208,9 @@ export default function DataPenggunaTable({
                   ? "Aktif"
                   : user.status_akun === 2
                     ? "Diblokir"
-                    : "Menunggu";
+                    : user.status_akun === 3
+                      ? "Ditolak"
+                      : "Menunggu";
 
               return (
                 <tr
@@ -254,7 +259,9 @@ export default function DataPenggunaTable({
                           ? "bg-green-100 text-green-700"
                           : statusLabel === "Menunggu"
                             ? "bg-yellow-100 text-yellow-700"
-                            : "bg-red-100 text-red-700"
+                            : statusLabel === "Ditolak"
+                              ? "bg-gray-100 text-gray-500"
+                              : "bg-red-100 text-red-700"
                         }`}
                     >
                       {statusLabel}
@@ -263,32 +270,62 @@ export default function DataPenggunaTable({
 
                   <Td>
                     <div className="flex justify-center gap-1 md:gap-2">
-                      <button
-                        disabled={actionLoading}
-                        title="Validasi / Aktifkan"
-                        onClick={() => updateStatus(user.npm, 1)}
-                        className="rounded-md bg-green-600 p-1.5 text-white hover:bg-green-700 disabled:opacity-50 transition shadow-sm"
-                      >
-                        <Check size={14} />
-                      </button>
+                      {/* JIKA STATUS MENUNGGU (0) → VALIDASI (HIJAU) & TOLAK (MERAH) */}
+                      {user.status_akun === 0 ? (
+                        <>
+                          <button
+                            disabled={actionLoading}
+                            title="Validasi / Aktifkan"
+                            onClick={() => updateStatus(user.npm, 1)}
+                            className="rounded-md bg-green-600 p-1.5 text-white hover:bg-green-700 disabled:opacity-50 transition shadow-sm"
+                          >
+                            <Check size={14} />
+                          </button>
 
-                      <button
-                        disabled={actionLoading}
-                        title="Blokir"
-                        onClick={() => updateStatus(user.npm, 2)}
-                        className="rounded-md bg-yellow-500 p-1.5 text-white hover:bg-yellow-600 disabled:opacity-50 transition shadow-sm"
-                      >
-                        <Ban size={14} />
-                      </button>
+                          <button
+                            disabled={actionLoading}
+                            title="Tolak Pendaftaran"
+                            onClick={() => updateStatus(user.npm, 3)}
+                            className="rounded-md bg-red-600 p-1.5 text-white hover:bg-red-700 disabled:opacity-50 transition shadow-sm"
+                          >
+                            <X size={14} />
+                          </button>
+                        </>
+                      ) : (
+                        /* JIKA STATUS AKTIF (1), BLOKIR (2), ATAU DITOLAK (3) */
+                        <>
+                          {user.status_akun === 2 && (
+                            <button
+                              disabled={actionLoading}
+                              title="Aktifkan"
+                              onClick={() => updateStatus(user.npm, 1)}
+                              className="rounded-md bg-green-600 p-1.5 text-white hover:bg-green-700 disabled:opacity-50 transition shadow-sm"
+                            >
+                              <Check size={14} />
+                            </button>
+                          )}
 
-                      <button
-                        disabled={actionLoading}
-                        title="Hapus"
-                        onClick={() => deleteUser(user.npm)}
-                        className="rounded-md bg-red-600 p-1.5 text-white hover:bg-red-700 disabled:opacity-50 transition shadow-sm"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                          {user.status_akun === 1 && (
+                            <button
+                              disabled={actionLoading}
+                              title="Blokir"
+                              onClick={() => updateStatus(user.npm, 2)}
+                              className="rounded-md bg-orange-500 p-1.5 text-white hover:bg-orange-600 disabled:opacity-50 transition shadow-sm"
+                            >
+                              <Ban size={14} />
+                            </button>
+                          )}
+
+                          <button
+                            disabled={actionLoading}
+                            title="Hapus"
+                            onClick={() => deleteUser(user.npm)}
+                            className="rounded-md bg-red-600 p-1.5 text-white hover:bg-red-700 disabled:opacity-50 transition shadow-sm"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </Td>
                 </tr>
@@ -335,8 +372,8 @@ export default function DataPenggunaTable({
                   key={num}
                   onClick={() => setPage(num)}
                   className={`w-7 h-7 rounded flex items-center justify-center font-medium transition ${page === num
-                      ? "bg-[#1F3A93] text-white"
-                      : "hover:bg-gray-100 text-gray-700"
+                    ? "bg-[#1F3A93] text-white"
+                    : "hover:bg-gray-100 text-gray-700"
                     }`}
                 >
                   {num}

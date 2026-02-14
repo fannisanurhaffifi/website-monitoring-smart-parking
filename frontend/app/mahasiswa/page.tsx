@@ -23,8 +23,11 @@ export default function MahasiswaHomePage() {
     try {
       setLoading(true);
 
-      // ✅ LEWAT API NEXT.JS (Bukan langsung backend)
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/statcard/parkir`, {
+      const npm = localStorage.getItem("npm");
+      if (!npm) return;
+
+      // ✅ PASANG NPM AGAR DAPAT KUOTA PERSONAL
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/statcard/parkir?npm=${npm}`, {
         cache: "no-store",
       });
 

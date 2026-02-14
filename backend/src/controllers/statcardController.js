@@ -24,20 +24,23 @@ const getStatCardParkir = async (req, res) => {
     // maka total_slot sudah merupakan angka slot yang masih tersedia.
     const tersedia = total_slot;
 
-    // ===== BATAS PARKIR (KEBIJAKAN ADMIN) =====
+    // ===== BATAS PARKIR & TERPAKAI (DARI TABEL KUOTA) =====
     let batas_parkir = 0;
+    let jumlah_terpakai = 0;
+
     if (npm) {
-      // Cek kuota individu dulu
-      const indivKuota = await db.query(`
-        SELECT batas_parkir FROM kuota_parkir 
+      // Ambil record terbaru (untuk mendapatkan bulan ini atau base quota)
+      const kuotaRows = await db.query(`
+        SELECT batas_parkir, jumlah_terpakai FROM kuota_parkir 
         WHERE npm = ? 
         ORDER BY id_kuota DESC LIMIT 1
       `, [npm]);
 
-      if (indivKuota.length > 0) {
-        batas_parkir = indivKuota[0].batas_parkir;
+      if (kuotaRows.length > 0) {
+        batas_parkir = kuotaRows[0].batas_parkir;
+        jumlah_terpakai = kuotaRows[0].jumlah_terpakai;
       } else {
-        // Fallback ke global
+        // Fallback ke kuota global
         const globalKuota = await db.query(`
           SELECT batas_parkir FROM kuota_parkir 
           WHERE npm IS NULL 
@@ -54,19 +57,7 @@ const getStatCardParkir = async (req, res) => {
       batas_parkir = globalKuota[0]?.batas_parkir || 0;
     }
 
-    // ===== JUMLAH TERPAKAI (HITUNG DARI LOG) =====
-    let jumlah_terpakai = 0;
-    if (npm) {
-      const terpakaiRows = await db.query(`
-        SELECT COUNT(*) AS jumlah_terpakai
-        FROM log_parkir l
-        JOIN kendaraan k ON l.id_kendaraan = k.id_kendaraan
-        WHERE k.npm = ?
-      `, [npm]);
-      jumlah_terpakai = terpakaiRows[0]?.jumlah_terpakai || 0;
-    }
-
-    // ===== KESEMPATAN PARKIR (Individual jika NPM ada, else 0/Batas) =====
+    // ===== KESEMPATAN PARKIR =====
     const kesempatan_parkir = npm ? Math.max(batas_parkir - jumlah_terpakai, 0) : batas_parkir;
 
     // ===== RESPONSE =====

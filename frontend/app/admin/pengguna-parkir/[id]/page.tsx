@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Check, X, Ban, Trash2 } from "lucide-react";
 
 type Profil = {
   npm: string;
@@ -88,6 +88,8 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
     if (npm) fetchRiwayat();
   }, [npm, page]);
 
+  const [scanLoading, setScanLoading] = useState(false);
+
   const handleUpdateRfid = async () => {
     if (!editRfid.trim()) {
       alert("Masukkan Kode RFID");
@@ -113,6 +115,40 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
       }
     } catch (err) {
       alert("Terjadi kesalahan sistem");
+    }
+  };
+
+  const handleStartScan = async () => {
+    const id_admin = localStorage.getItem("id_admin");
+    if (!id_admin) {
+      alert("Sesi admin tidak ditemukan, silakan login ulang");
+      return;
+    }
+
+    try {
+      setScanLoading(true);
+      const res = await fetch("/api/admin/rfid/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id_kendaraan: profil?.id_kendaraan,
+          id_admin: id_admin
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.status === "success") {
+        alert("Mode Scan Aktif! Silakan tempelkan kartu ke alat dalam 60 detik.");
+
+        // Opsional: Polling atau biarkan user refresh manual/otomatis
+        // Di sini kita biarkan user menunggu sampai alat selesai scan
+      } else {
+        alert(data.message || "Gagal mengaktifkan mode scan");
+      }
+    } catch (err) {
+      alert("Terjadi kesalahan sistem");
+    } finally {
+      setScanLoading(false);
     }
   };
 
@@ -142,10 +178,12 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   };
 
   const handleUpdateStatus = async (status: number) => {
-    const confirm = window.confirm(
-      status === 1 ? "Aktifkan akun ini?" : "Blokir akun ini?"
-    );
-    if (!confirm) return;
+    let msg = "Aktifkan akun ini?";
+    if (status === 2) msg = "Blokir akun ini?";
+    if (status === 3) msg = "Tolak pendaftaran akun ini?";
+
+    const confirmAction = window.confirm(msg);
+    if (!confirmAction) return;
 
     try {
       const res = await fetch("/api/admin/pengguna/status", {
@@ -201,29 +239,42 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
           </button>
 
           <div className="flex flex-wrap gap-3">
-            {profil.status_akun !== 1 && (
+            {profil.status_akun !== 1 && profil.status_akun !== 3 && (
               <button
                 onClick={() => handleUpdateStatus(1)}
-                className="rounded-md bg-green-600 px-4 py-2 text-xs md:text-sm font-semibold text-white hover:bg-green-700 transition shadow-sm"
+                className="flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-xs md:text-sm font-semibold text-white hover:bg-green-700 transition shadow-sm"
               >
-                Aktifkan Pengguna
+                <Check size={16} />
+                {profil.status_akun === 0 ? "Validasi & Aktifkan" : "Aktifkan Akun"}
+              </button>
+            )}
+
+            {profil.status_akun === 0 && (
+              <button
+                onClick={() => handleUpdateStatus(3)}
+                className="flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-xs md:text-sm font-semibold text-white hover:bg-red-700 transition shadow-sm"
+              >
+                <X size={16} />
+                Tolak Pendaftaran
               </button>
             )}
 
             {profil.status_akun === 1 && (
               <button
                 onClick={() => handleUpdateStatus(2)}
-                className="rounded-md bg-yellow-500 px-4 py-2 text-xs md:text-sm font-semibold text-white hover:bg-yellow-600 transition shadow-sm"
+                className="flex items-center gap-2 rounded-md bg-orange-500 px-4 py-2 text-xs md:text-sm font-semibold text-white hover:bg-orange-600 transition shadow-sm"
               >
+                <Ban size={16} />
                 Blokir Pengguna
               </button>
             )}
 
             <button
               onClick={handleHapus}
-              className="rounded-md border border-red-200 bg-red-50 text-red-600 px-4 py-2 text-xs md:text-sm font-semibold hover:bg-red-100 transition shadow-sm"
+              className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 text-red-600 px-4 py-2 text-xs md:text-sm font-semibold hover:bg-red-600 hover:text-white transition shadow-sm"
             >
-              Hapus Pengguna
+              <Trash2 size={16} />
+              Hapus Selamanya
             </button>
           </div>
         </div>
@@ -255,10 +306,12 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                   ? "bg-green-100 text-green-700"
                   : profil.status_akun === 0
                     ? "bg-yellow-100 text-yellow-700"
-                    : "bg-red-100 text-red-700"
+                    : profil.status_akun === 3
+                      ? "bg-gray-100 text-gray-500"
+                      : "bg-red-100 text-red-700"
                 }`}
             >
-              {profil.status_akun === 1 ? "Aktif" : profil.status_akun === 2 ? "Diblokir" : "Menunggu"}
+              {profil.status_akun === 1 ? "Aktif" : profil.status_akun === 2 ? "Diblokir" : profil.status_akun === 3 ? "Ditolak" : "Menunggu"}
             </span>
           </div>
 
@@ -274,48 +327,66 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
         <div className="my-8 h-px bg-gray-100" />
 
         {/* ================= INFORMASI TEKNIS ================= */}
-        <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
-          <Info label="Nomor Kendaraan" value={profil.plat_nomor || "-"} />
+        {profil.status_akun !== 3 ? (
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
+            <Info label="Nomor Kendaraan" value={profil.plat_nomor || "-"} />
 
-          <div className="space-y-2">
-            <Info label="Kode RFID" value={profil.kode_rfid || "Belum Terdaftar"} />
-            <div className="flex items-center gap-2 mt-2">
-              <input
-                type="text"
-                placeholder="Input RFID"
-                value={editRfid}
-                onChange={(e) => setEditRfid(e.target.value)}
-                className="w-full sm:w-32 rounded border border-gray-300 px-2 py-1 text-xs focus:outline-[#1F3A93]"
-              />
-              <button
-                onClick={handleUpdateRfid}
-                className="rounded bg-[#1F3A93] px-3 py-1 text-[10px] font-bold text-white hover:bg-[#162C6E]"
-              >
-                SET
-              </button>
+            <div className="space-y-2">
+              <Info label="Kode RFID" value={profil.kode_rfid || "Belum Terdaftar"} />
+              <div className="flex flex-col gap-2 mt-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Input Manual"
+                    value={editRfid}
+                    onChange={(e) => setEditRfid(e.target.value)}
+                    className="w-full sm:w-32 rounded border border-gray-300 px-2 py-1 text-xs focus:outline-[#1F3A93]"
+                  />
+                  <button
+                    onClick={handleUpdateRfid}
+                    className="rounded bg-[#1F3A93] px-3 py-1 text-[10px] font-bold text-white hover:bg-[#162C6E]"
+                  >
+                    SET
+                  </button>
+                </div>
+
+                <button
+                  onClick={handleStartScan}
+                  disabled={scanLoading}
+                  className={`rounded border-2 border-[#1F3A93] px-3 py-1.5 text-[10px] font-bold transition
+                    ${scanLoading ? "bg-gray-100 text-gray-400 border-gray-300" : "text-[#1F3A93] hover:bg-[#1F3A93] hover:text-white"}`}
+                >
+                  {scanLoading ? "MENYIAPKAN ALAT..." : "SCAN KARTU (OTOMATIS)"}
+                </button>
+                <p className="text-[9px] text-gray-400 italic font-medium">*Gunakan alat untuk scan otomatis (aktif 60 dtk)</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Info label="Sisa Kesempatan Parkir" value={`${profil.sisa_kuota ?? 0} Kali`} />
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  type="number"
+                  placeholder="Set Batas"
+                  value={editKuota}
+                  onChange={(e) => setEditKuota(e.target.value)}
+                  className="w-full sm:w-24 rounded border border-gray-300 px-2 py-1 text-xs focus:outline-[#1F3A93]"
+                />
+                <button
+                  onClick={handleUpdateKuota}
+                  className="rounded bg-[#1F3A93] px-3 py-1 text-[10px] font-bold text-white hover:bg-[#162C6E]"
+                >
+                  SET
+                </button>
+              </div>
+              <p className="text-[9px] text-gray-400 italic font-medium">*Mengubah seluruh batas</p>
             </div>
           </div>
-
-          <div className="space-y-2">
-            <Info label="Sisa Kesempatan Parkir" value={`${profil.sisa_kuota ?? 0} Kali`} />
-            <div className="flex items-center gap-2 mt-2">
-              <input
-                type="number"
-                placeholder="Set Batas"
-                value={editKuota}
-                onChange={(e) => setEditKuota(e.target.value)}
-                className="w-full sm:w-24 rounded border border-gray-300 px-2 py-1 text-xs focus:outline-[#1F3A93]"
-              />
-              <button
-                onClick={handleUpdateKuota}
-                className="rounded bg-[#1F3A93] px-3 py-1 text-[10px] font-bold text-white hover:bg-[#162C6E]"
-              >
-                SET
-              </button>
-            </div>
-            <p className="text-[9px] text-gray-400 italic font-medium">*Mengubah seluruh batas</p>
+        ) : (
+          <div className="rounded-lg bg-red-50 p-4 text-center">
+            <p className="text-sm font-semibold text-red-600">Pendaftaran ditolak. Silakan hapus data ini atau hubungi mahasiswa untuk daftar ulang.</p>
           </div>
-        </div>
+        )}
 
         <div className="my-8 h-px bg-gray-100" />
 
