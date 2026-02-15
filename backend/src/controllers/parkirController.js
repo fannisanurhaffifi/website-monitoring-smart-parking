@@ -134,6 +134,10 @@ const parkirScan = async (req, res) => {
         [kuota.id_kuota]
       );
 
+      // Emit update real-time
+      const io = req.app.get("io");
+      io.emit("parking_update", { action: "KELUAR", id_kendaraan });
+
       return res.json({
         izin: true,
         aksi: "KELUAR",
@@ -211,6 +215,10 @@ const parkirScan = async (req, res) => {
     );
 
     await query("UPDATE slot_parkir SET jumlah = jumlah - 1");
+
+    // Emit update real-time
+    const io = req.app.get("io");
+    io.emit("parking_update", { action: "MASUK", id_kendaraan });
 
     return res.json({
       izin: true,

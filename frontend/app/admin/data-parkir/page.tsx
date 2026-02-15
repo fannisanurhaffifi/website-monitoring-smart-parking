@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import StatCard from "@/app/components/StatCard";
 import DataKendaraanParkir from "@/app/components/DataKendaraanParkir";
+import { io } from "socket.io-client";
 
 type DashboardSummary = {
   total_slot: number;
@@ -25,27 +26,39 @@ export default function DataParkirAdminPage() {
   const [endDate, setEndDate] = useState("");
 
   // ================= FETCH SUMMARY =================
-  useEffect(() => {
-    const fetchSummary = async () => {
-      try {
-        const res = await fetch("/api/admin/dashboard/summary", {
-          cache: "no-store",
-        });
+  const fetchSummary = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/dashboard/summary", {
+        cache: "no-store",
+      });
 
-        const json = await res.json();
+      const json = await res.json();
 
-        if (res.ok && json.status === "success") {
-          setSummary(json.data);
-        }
-      } catch (err) {
-        console.error("FETCH SUMMARY ERROR:", err);
-      } finally {
-        setLoadingSummary(false);
+      if (res.ok && json.status === "success") {
+        setSummary(json.data);
       }
-    };
-
-    fetchSummary();
+    } catch (err) {
+      console.error("FETCH SUMMARY ERROR:", err);
+    } finally {
+      setLoadingSummary(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchSummary();
+
+    // Setup Socket.io for updates
+    const socket = io("http://localhost:5000");
+
+    socket.on("parking_update", (payload: any) => {
+      console.log("📊 Data Parkir summary update received:", payload);
+      fetchSummary();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [fetchSummary]);
 
   return (
     <div className="space-y-6">

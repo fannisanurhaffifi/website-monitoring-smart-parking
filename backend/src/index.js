@@ -11,7 +11,29 @@ const statistikRoutes = require("./routes/statistikRoutes");
 const parkirRoutes = require("./routes/parkirRoutes");
 const statcardRoutes = require("./routes/statcardRoutes");
 
+const http = require("http");
+const { Server } = require("socket.io");
+
 const app = express();
+const server = http.createServer(app);
+
+// Initialize Socket.io
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:3000", // Frontend URL
+    methods: ["GET", "POST"],
+  },
+});
+
+// Store io in app settings to be accessible in controllers
+app.set("io", io);
+
+io.on("connection", (socket) => {
+  console.log("🔌 Client connected:", socket.id);
+  socket.on("disconnect", () => {
+    console.log("❌ Client disconnected:", socket.id);
+  });
+});
 
 /**
  * ================= BASIC CONFIG =================
@@ -109,6 +131,6 @@ app.use((err, req, res, next) => {
  */
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Server aktif di http://localhost:${PORT}`);
 });

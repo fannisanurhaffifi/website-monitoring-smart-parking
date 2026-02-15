@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import StatCard from "@/app/components/StatCard";
 import StatistikKendaraan from "@/app/components/statistik-kendaraan";
 import DataKendaraanParkir from "@/app/components/DataKendaraanParkir";
+import { io } from "socket.io-client";
 
 type DashboardSummary = {
   total_slot: number;
@@ -18,7 +19,6 @@ export default function AdminDashboardPage() {
     terisi: 0,
     tersedia: 0,
     pengguna_aktif: 0,
-
   });
 
   const [loading, setLoading] = useState<boolean>(true);
@@ -26,7 +26,7 @@ export default function AdminDashboardPage() {
   const [newSlot, setNewSlot] = useState<number>(0);
   const [updatingSlot, setUpdatingSlot] = useState<boolean>(false);
 
-  const fetchSummary = async (signal?: AbortSignal) => {
+  const fetchSummary = useCallback(async (signal?: AbortSignal) => {
     try {
       const res = await fetch("/api/admin/dashboard/summary", {
         cache: "no-store",
@@ -53,7 +53,7 @@ export default function AdminDashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const handleUpdateSlot = async () => {
     if (newSlot < 0) {
@@ -84,13 +84,28 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const [refreshKey, setRefreshKey] = useState(0);
+
   useEffect(() => {
     const controller = new AbortController();
     fetchSummary(controller.signal);
-    return () => controller.abort();
-  }, []);
 
+    // Setup Socket.io for dashboard updates
+    const socket = io("http://localhost:5000");
 
+    socket.on("parking_update", (payload: any) => {
+      console.log("📊 Dashboard update received:", payload);
+      // Refresh summary stats in real-time
+      fetchSummary();
+      // Refresh chart
+      setRefreshKey(prev => prev + 1);
+    });
+
+    return () => {
+      controller.abort();
+      socket.disconnect();
+    };
+  }, [fetchSummary]);
 
   if (loading) {
     return (
@@ -144,7 +159,7 @@ export default function AdminDashboardPage() {
 
       {/* ================= STATISTIK ================= */}
       <div className="rounded-xl border border-gray-300 bg-[#E9EBEE] p-4 md:p-6">
-        <StatistikKendaraan />
+        <StatistikKendaraan refreshKey={refreshKey} />
       </div>
 
       {/* ================= DATA PARKIR ================= */}

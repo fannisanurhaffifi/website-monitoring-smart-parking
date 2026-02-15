@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { io } from "socket.io-client";
 
 type Kendaraan = {
   no?: number;
@@ -35,67 +36,80 @@ export default function DataKendaraanParkir({
   const [page, setPage] = useState(1);
   const [totalData, setTotalData] = useState(0);
 
+  // Memoize fetchData so it can be called from socket listener
+  const fetchData = useCallback(async (signal?: AbortSignal) => {
+    try {
+      setLoading(true);
+      setError("");
+
+      // Hitung offset berdasarkan page & limit
+      const offset = (page - 1) * limit;
+
+      const params = new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset),
+      });
+
+      if (search) params.append("search", search);
+      if (startDate) params.append("start", startDate);
+      if (endDate) params.append("end", endDate);
+
+      const res = await fetch(
+        `/api/admin/parkir?${params.toString()}`,
+        {
+          cache: "no-store",
+          signal,
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error("HTTP error");
+      }
+
+      const json = await res.json();
+
+      if (json.status === "success") {
+        setData(json.data || []);
+        setTotalData(json.total || 0); // Ambil total data dari backend
+      } else {
+        setData([]);
+        setTotalData(0);
+      }
+    } catch (err: any) {
+      if (err.name !== "AbortError") {
+        console.error("FETCH DATA PARKIR ERROR:", err);
+        setError("Gagal memuat data parkir");
+        setData([]);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [page, limit, search, startDate, endDate]);
+
   // Reset page ke 1 jika filter berubah
   useEffect(() => {
     setPage(1);
   }, [search, startDate, endDate, limit]);
 
+  // Fetch initial data & handle socket connection
   useEffect(() => {
     const controller = new AbortController();
+    fetchData(controller.signal);
 
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError("");
+    // Setup Socket.io Connection
+    const socket = io("http://localhost:5000");
 
-        // Hitung offset berdasarkan page & limit
-        const offset = (page - 1) * limit;
+    socket.on("parking_update", (payload: any) => {
+      console.log("🔄 Real-time update received:", payload);
+      // Refresh data when there's an update from IoT
+      fetchData();
+    });
 
-        const params = new URLSearchParams({
-          limit: String(limit),
-          offset: String(offset),
-        });
-
-        if (search) params.append("search", search);
-        if (startDate) params.append("start", startDate);
-        if (endDate) params.append("end", endDate);
-
-        const res = await fetch(
-          `/api/admin/parkir?${params.toString()}`,
-          {
-            cache: "no-store",
-            signal: controller.signal,
-          }
-        );
-
-        if (!res.ok) {
-          throw new Error("HTTP error");
-        }
-
-        const json = await res.json();
-
-        if (json.status === "success") {
-          setData(json.data || []);
-          setTotalData(json.total || 0); // Ambil total data dari backend
-        } else {
-          setData([]);
-          setTotalData(0);
-        }
-      } catch (err: any) {
-        if (err.name !== "AbortError") {
-          console.error("FETCH DATA PARKIR ERROR:", err);
-          setError("Gagal memuat data parkir");
-          setData([]);
-        }
-      } finally {
-        setLoading(false);
-      }
+    return () => {
+      controller.abort();
+      socket.disconnect();
     };
-
-    fetchData();
-
-    return () => controller.abort();
-  }, [limit, page, search, startDate, endDate]);
+  }, [fetchData]);
 
   // Hitung total halaman
   const totalPages = Math.ceil(totalData / limit);
