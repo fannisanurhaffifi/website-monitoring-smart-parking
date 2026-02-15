@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import StatCard from "@/app/components/StatCard";
 import DataKendaraanParkir from "@/app/components/DataKendaraanParkir";
 import { io } from "socket.io-client";
@@ -25,11 +25,14 @@ export default function DataParkirAdminPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
+  const fetchRef = useRef<any>(null);
+
   // ================= FETCH SUMMARY =================
-  const fetchSummary = useCallback(async () => {
+  const fetchSummary = useCallback(async (signal?: AbortSignal) => {
     try {
       const res = await fetch("/api/admin/dashboard/summary", {
         cache: "no-store",
+        signal
       });
 
       const json = await res.json();
@@ -37,28 +40,55 @@ export default function DataParkirAdminPage() {
       if (res.ok && json.status === "success") {
         setSummary(json.data);
       }
-    } catch (err) {
-      console.error("FETCH SUMMARY ERROR:", err);
+    } catch (err: any) {
+      if (err.name !== "AbortError") {
+        console.error("FETCH SUMMARY ERROR:", err);
+      }
     } finally {
       setLoadingSummary(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchSummary();
+    fetchRef.current = fetchSummary;
+  }, [fetchSummary]);
 
-    // Setup Socket.io for updates
-    const socket = io("http://localhost:5000");
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchSummary(controller.signal);
+    return () => controller.abort();
+  }, [fetchSummary]);
+
+  useEffect(() => {
+    // Dynamic Host for Socket.io
+    const socketHost = window.location.hostname === "localhost"
+      ? "http://localhost:5000"
+      : `http://${window.location.hostname}:5000`;
+
+    const socket = io(socketHost);
+
+    socket.on("connect", () => {
+      console.log("✅ Data Parkir Socket Connected");
+    });
 
     socket.on("parking_update", (payload: any) => {
-      console.log("📊 Data Parkir summary update received:", payload);
-      fetchSummary();
+      console.log("📊 Data Parkir summary update received (parking):", payload);
+      if (fetchRef.current) fetchRef.current();
+    });
+
+    socket.on("user_update", (payload: any) => {
+      console.log("👥 Data Parkir summary update received (user):", payload);
+      if (fetchRef.current) fetchRef.current();
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("❌ Data Parkir Socket Error:", err);
     });
 
     return () => {
       socket.disconnect();
     };
-  }, [fetchSummary]);
+  }, []);
 
   return (
     <div className="space-y-6">

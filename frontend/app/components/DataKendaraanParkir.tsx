@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { io } from "socket.io-client";
 
@@ -36,15 +36,15 @@ export default function DataKendaraanParkir({
   const [page, setPage] = useState(1);
   const [totalData, setTotalData] = useState(0);
 
-  // Memoize fetchData so it can be called from socket listener
+  // Ref untuk menyimpan fungsi fetch terbaru agar tidak memicu reconnnect socket
+  const fetchRef = useRef<any>(null);
+
   const fetchData = useCallback(async (signal?: AbortSignal) => {
     try {
       setLoading(true);
       setError("");
 
-      // Hitung offset berdasarkan page & limit
       const offset = (page - 1) * limit;
-
       const params = new URLSearchParams({
         limit: String(limit),
         offset: String(offset),
@@ -54,23 +54,17 @@ export default function DataKendaraanParkir({
       if (startDate) params.append("start", startDate);
       if (endDate) params.append("end", endDate);
 
-      const res = await fetch(
-        `/api/admin/parkir?${params.toString()}`,
-        {
-          cache: "no-store",
-          signal,
-        }
-      );
+      const res = await fetch(`/api/admin/parkir?${params.toString()}`, {
+        cache: "no-store",
+        signal,
+      });
 
-      if (!res.ok) {
-        throw new Error("HTTP error");
-      }
-
+      if (!res.ok) throw new Error("HTTP error");
       const json = await res.json();
 
       if (json.status === "success") {
         setData(json.data || []);
-        setTotalData(json.total || 0); // Ambil total data dari backend
+        setTotalData(json.total || 0);
       } else {
         setData([]);
         setTotalData(0);
@@ -86,30 +80,48 @@ export default function DataKendaraanParkir({
     }
   }, [page, limit, search, startDate, endDate]);
 
+  // Update ref setiap kali fetchData berubah
+  useEffect(() => {
+    fetchRef.current = fetchData;
+  }, [fetchData]);
+
   // Reset page ke 1 jika filter berubah
   useEffect(() => {
     setPage(1);
   }, [search, startDate, endDate, limit]);
 
-  // Fetch initial data & handle socket connection
+  // 1. Hook untuk fetch data saat filter/page berubah
   useEffect(() => {
     const controller = new AbortController();
     fetchData(controller.signal);
+    return () => controller.abort();
+  }, [fetchData]);
 
-    // Setup Socket.io Connection
-    const socket = io("http://localhost:5000");
+  useEffect(() => {
+    // Dynamic Host for Socket.io
+    const socketHost = window.location.hostname === "localhost"
+      ? "http://localhost:5000"
+      : `http://${window.location.hostname}:5000`;
+
+    const socket = io(socketHost);
+
+    socket.on("connect", () => {
+      console.log("✅ Table Socket Connected");
+    });
 
     socket.on("parking_update", (payload: any) => {
-      console.log("🔄 Real-time update received:", payload);
-      // Refresh data when there's an update from IoT
-      fetchData();
+      console.log("🔄 Real-time table update received:", payload);
+      if (fetchRef.current) fetchRef.current();
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("❌ Table Socket Error:", err);
     });
 
     return () => {
-      controller.abort();
       socket.disconnect();
     };
-  }, [fetchData]);
+  }, []);
 
   // Hitung total halaman
   const totalPages = Math.ceil(totalData / limit);

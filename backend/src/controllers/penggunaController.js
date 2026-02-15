@@ -60,6 +60,10 @@ const registerPengguna = async (req, res) => {
     // kirim email notifikasi (tidak menggagalkan registrasi jika error)
     sendRegistrationPendingEmail(email, nama);
 
+    // 📡 Real-time update untuk Admin
+    const io = req.app.get("io");
+    if (io) io.emit("user_update", { action: "REGISTER", npm });
+
     return res.status(201).json({
       status: "success",
       message: "Registrasi berhasil, menunggu verifikasi admin",
@@ -264,6 +268,10 @@ const editProfilPengguna = async (req, res) => {
     }
 
     console.log(`✅ Profil NPM ${trimmedNpm} berhasil diperbarui`);
+
+    // 📡 Real-time update untuk Admin
+    const io = req.app.get("io");
+    if (io) io.emit("user_update", { action: "EDIT_PROFIL", npm: trimmedNpm });
 
     return res.status(200).json({
       status: "success",

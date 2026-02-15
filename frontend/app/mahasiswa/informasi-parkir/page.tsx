@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import StatCard from "@/app/components/StatCard";
+import { io } from "socket.io-client";
 
 /* ===== TIPE DATA RIWAYAT ===== */
 type RiwayatMasuk = {
@@ -30,8 +31,11 @@ export default function InformasiParkirPage() {
 
   const [riwayat, setRiwayat] = useState<RiwayatMasuk[]>([]);
 
+  const fetchRef = useRef<any>(null);
+  const riwayatRef = useRef<any>(null);
+
   /* ================= STATCARD ================= */
-  const fetchStatCard = async () => {
+  const fetchStatCard = useCallback(async (signal?: AbortSignal) => {
     try {
       const npm = localStorage.getItem("npm");
       let url = `${process.env.NEXT_PUBLIC_API_URL}/api/statcard/parkir`;
@@ -39,20 +43,23 @@ export default function InformasiParkirPage() {
 
       const res = await fetch(url, {
         cache: "no-store",
+        signal
       });
       const result = await res.json();
 
       if (res.ok && result.success) {
         setStatcard(result.data);
       }
-    } catch (error) {
-      console.error("Gagal mengambil statcard:", error);
+    } catch (error: any) {
+      if (error.name !== "AbortError") {
+        console.error("Gagal mengambil statcard:", error);
+      }
     }
-  };
+  }, []);
 
 
   /* ================= RIWAYAT PARKIR ================= */
-  const fetchRiwayatParkir = async () => {
+  const fetchRiwayatParkir = useCallback(async (signal?: AbortSignal) => {
     try {
       const npm = localStorage.getItem("npm");
 
@@ -63,7 +70,7 @@ export default function InformasiParkirPage() {
 
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/pengguna/users/riwayat/${npm}`,
-        { cache: "no-store" },
+        { cache: "no-store", signal },
       );
 
       const result = await res.json();
@@ -88,18 +95,45 @@ export default function InformasiParkirPage() {
       } else {
         setRiwayat([]);
       }
-    } catch (error) {
-      console.error("Gagal mengambil riwayat parkir:", error);
-      setRiwayat([]);
+    } catch (error: any) {
+      if (error.name !== "AbortError") {
+        console.error("Gagal mengambil riwayat parkir:", error);
+        setRiwayat([]);
+      }
     } finally {
       setLoadingRiwayat(false);
     }
-  };
+  }, []);
 
   /* ================= EFFECT ================= */
   useEffect(() => {
-    fetchStatCard();
-    fetchRiwayatParkir();
+    fetchRef.current = fetchStatCard;
+    riwayatRef.current = fetchRiwayatParkir;
+  }, [fetchStatCard, fetchRiwayatParkir]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchStatCard(controller.signal);
+    fetchRiwayatParkir(controller.signal);
+    return () => controller.abort();
+  }, [fetchStatCard, fetchRiwayatParkir]);
+
+  useEffect(() => {
+    const socketHost = window.location.hostname === "localhost"
+      ? "http://localhost:5000"
+      : `http://${window.location.hostname}:5000`;
+
+    const socket = io(socketHost);
+
+    socket.on("parking_update", (payload: any) => {
+      console.log("🚗 Informasi Parkir real-time update:", payload);
+      if (fetchRef.current) fetchRef.current();
+      if (riwayatRef.current) riwayatRef.current();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   /* ================= REFRESH ================= */

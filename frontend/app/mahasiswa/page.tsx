@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import StatCard from "@/app/components/StatCard";
 import StatistikKendaraan from "@/app/components/statistik-kendaraan";
+import { io } from "socket.io-client";
 
 type StatCardData = {
   terisi: number;
@@ -18,17 +19,19 @@ export default function MahasiswaHomePage() {
     kesempatan_parkir: 0,
   });
 
+  const fetchRef = useRef<any>(null);
+
   /* ================= FETCH STATCARD ================= */
-  const fetchStatCard = async () => {
+  const fetchStatCard = useCallback(async (signal?: AbortSignal) => {
     try {
       setLoading(true);
 
       const npm = localStorage.getItem("npm");
       if (!npm) return;
 
-      // ✅ PASANG NPM AGAR DAPAT KUOTA PERSONAL
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/statcard/parkir?npm=${npm}`, {
         cache: "no-store",
+        signal
       });
 
       const result = await res.json();
@@ -36,15 +39,43 @@ export default function MahasiswaHomePage() {
       if (res.ok && result.success) {
         setStatcard(result.data);
       }
-    } catch (error) {
-      console.error("Gagal mengambil statcard:", error);
+    } catch (error: any) {
+      if (error.name !== "AbortError") {
+        console.error("Gagal mengambil statcard:", error);
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchStatCard();
+    fetchRef.current = fetchStatCard;
+  }, [fetchStatCard]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchStatCard(controller.signal);
+    return () => controller.abort();
+  }, [fetchStatCard]);
+
+  // Real-time Update
+  const [refreshKey, setRefreshKey] = useState(0);
+  useEffect(() => {
+    const socketHost = window.location.hostname === "localhost"
+      ? "http://localhost:5000"
+      : `http://${window.location.hostname}:5000`;
+
+    const socket = io(socketHost);
+
+    socket.on("parking_update", (payload: any) => {
+      console.log("🚗 Mahasiswa Dashboard update:", payload);
+      if (fetchRef.current) fetchRef.current();
+      setRefreshKey(prev => prev + 1);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   return (
@@ -76,7 +107,7 @@ export default function MahasiswaHomePage() {
 
       {/* ================= GRAFIK STATISTIK ================= */}
       <section>
-        <StatistikKendaraan />
+        <StatistikKendaraan refreshKey={refreshKey} />
       </section>
     </div>
   );

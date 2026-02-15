@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { io } from "socket.io-client";
 
 /* ================= DATA JURUSAN ================= */
 
@@ -50,26 +51,61 @@ export default function ProfilMahasiswaPage() {
 
   /* ================= FETCH ================= */
 
-  const fetchProfil = async () => {
+  const fetchRef = useRef<any>(null);
+
+  const fetchProfil = useCallback(async (signal?: AbortSignal) => {
     const npm = localStorage.getItem("npm");
     if (!npm) return;
 
-    const res = await fetch(`/api/users/profile?npm=${npm}`);
-    const data = await res.json();
+    try {
+      const res = await fetch(`/api/users/profile?npm=${npm}`, { signal });
+      const data = await res.json();
 
-    if (res.ok) {
-      setProfil(data.data);
+      if (res.ok) {
+        setProfil(data.data);
 
-      if (data.data?.foto) {
-        setPreviewFoto(
-          `${process.env.NEXT_PUBLIC_API_URL}/uploads/${data.data.foto}`
-        );
+        if (data.data?.foto) {
+          setPreviewFoto(
+            `${process.env.NEXT_PUBLIC_API_URL}/uploads/${data.data.foto}`
+          );
+        }
+      }
+    } catch (err: any) {
+      if (err.name !== "AbortError") {
+        console.error("FETCH PROFIL ERROR:", err);
       }
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchProfil();
+    fetchRef.current = fetchProfil;
+  }, [fetchProfil]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchProfil(controller.signal);
+    return () => controller.abort();
+  }, [fetchProfil]);
+
+  // Socket Listener for Status Update
+  useEffect(() => {
+    const socketHost = window.location.hostname === "localhost"
+      ? "http://localhost:5000"
+      : `http://${window.location.hostname}:5000`;
+
+    const socket = io(socketHost);
+
+    socket.on("user_update", (payload: any) => {
+      console.log("👥 Profil real-time update:", payload);
+      const myNpm = localStorage.getItem("npm");
+      if (payload.npm === myNpm || !payload.npm) {
+        if (fetchRef.current) fetchRef.current();
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   if (!profil) {
@@ -115,7 +151,6 @@ export default function ProfilMahasiswaPage() {
     });
 
     if (res.ok) {
-      alert("Profil berhasil diperbarui");
       fetchProfil(); // Segarkan data
     } else {
       alert("Gagal memperbarui profil");

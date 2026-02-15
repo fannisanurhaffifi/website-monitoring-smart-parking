@@ -113,6 +113,10 @@ const verifikasiPengguna = async (req, res) => {
     if (status_akun === 1) successMessage = "Akun berhasil diverifikasi";
     if (status_akun === 3) successMessage = "Pendaftaran berhasil ditolak";
 
+    // 📡 Real-time update untuk Admin
+    const io = req.app.get("io");
+    if (io) io.emit("user_update", { action: "VERIFY", npm, status: status_akun });
+
     return res.status(200).json({
       status: "success",
       message: successMessage,
@@ -248,6 +252,10 @@ const hapusPengguna = async (req, res) => {
         message: "Pengguna tidak ditemukan",
       });
     }
+
+    // 📡 Real-time update untuk Admin
+    const io = req.app.get("io");
+    if (io) io.emit("user_update", { action: "DELETE", npm });
 
     return res.status(200).json({
       status: "success",
@@ -675,6 +683,9 @@ const updateSlotParkir = async (req, res) => {
         [jumlah, id_admin || null]
       );
     }
+
+    const io = req.app.get("io");
+    io.emit("parking_update", { action: "SLOT_UPDATE" });
 
     return res.status(200).json({
       status: "success",

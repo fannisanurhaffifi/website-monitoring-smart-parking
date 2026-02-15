@@ -1,10 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import StatistikKendaraan from "@/app/components/statistik-kendaraan";
+import { io } from "socket.io-client";
 
 export default function StatistikKendaraanPage() {
   const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const socketHost = window.location.hostname === "localhost"
+      ? "http://localhost:5000"
+      : `http://${window.location.hostname}:5000`;
+
+    const socket = io(socketHost);
+
+    socket.on("parking_update", (payload: any) => {
+      console.log("📈 Statistik real-time refresh:", payload);
+      setRefreshKey(prev => prev + 1);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
 
   const handleRefresh = () => {
     setRefreshKey((prev) => prev + 1);

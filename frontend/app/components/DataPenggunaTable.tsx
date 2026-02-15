@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Check, X, Ban, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { io } from "socket.io-client";
@@ -31,6 +31,8 @@ export default function DataPenggunaTable({
   const [limit, setLimit] = useState(10);
   const [page, setPage] = useState(1);
   const [totalData, setTotalData] = useState(0);
+
+  const fetchRef = useRef<any>(null);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -74,23 +76,51 @@ export default function DataPenggunaTable({
     }
   }, [page, limit, search, statusFilter]);
 
+  // Update ref
+  useEffect(() => {
+    fetchRef.current = fetchUsers;
+  }, [fetchUsers]);
+
   useEffect(() => {
     setPage(1);
   }, [search, statusFilter, limit]);
 
+  // Hook fetch data
   useEffect(() => {
     fetchUsers();
+  }, [fetchUsers]);
 
-    // Listen for real-time parking updates to refresh sisa_kuota
-    const socket = io("http://localhost:5000");
-    socket.on("parking_update", () => {
-      fetchUsers();
+  // Hook Socket - Sekali pas mount
+  useEffect(() => {
+    // Dynamic Host for Socket.io
+    const socketHost = window.location.hostname === "localhost"
+      ? "http://localhost:5000"
+      : `http://${window.location.hostname}:5000`;
+
+    const socket = io(socketHost);
+
+    socket.on("connect", () => {
+      console.log("✅ User Table Socket Connected");
+    });
+
+    socket.on("parking_update", (payload: any) => {
+      console.log("🔄 Real-time table update (parking):", payload);
+      if (fetchRef.current) fetchRef.current();
+    });
+
+    socket.on("user_update", (payload: any) => {
+      console.log("👥 Real-time table update (user):", payload);
+      if (fetchRef.current) fetchRef.current();
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("❌ User Table Socket Error:", err);
     });
 
     return () => {
       socket.disconnect();
     };
-  }, [fetchUsers]);
+  }, []);
 
   const updateStatus = async (npm: string, status: number) => {
     let message = "Aktifkan hak parkir pengguna ini?";

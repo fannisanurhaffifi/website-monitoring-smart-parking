@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use, useCallback } from "react";
+import { useEffect, useState, use, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { ArrowLeft, Check, X, Ban, Trash2 } from "lucide-react";
@@ -40,16 +40,20 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   const [editKuota, setEditKuota] = useState<string>("");
   const [editRfid, setEditRfid] = useState<string>("");
 
+  const detailRef = useRef<any>(null);
+  const riwayatRef = useRef<any>(null);
+
   // Pagination State
   const [page, setPage] = useState(1);
   const [totalData, setTotalData] = useState(0);
   const limit = 5;
 
-  const fetchDetail = useCallback(async () => {
+  const fetchDetail = useCallback(async (signal?: AbortSignal) => {
     try {
       setLoading(true);
       const res = await fetch(`/api/users/profile?npm=${npm}`, {
         cache: "no-store",
+        signal,
       });
       const json = await res.json();
       if (res.ok) {
@@ -58,64 +62,80 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
           setEditRfid(json.data.kode_rfid);
         }
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      if (err.name !== "AbortError") {
+        console.error(err);
+      }
     } finally {
       setLoading(false);
     }
   }, [npm]);
 
-  const fetchRiwayat = useCallback(async () => {
+  const fetchRiwayat = useCallback(async (signal?: AbortSignal) => {
     try {
       const offset = (page - 1) * limit;
       const res = await fetch(`/api/admin/parkir?search=${npm}&limit=${limit}&offset=${offset}`, {
         cache: "no-store",
+        signal,
       });
       const json = await res.json();
       if (json.status === "success") {
         setRiwayat(json.data);
         setTotalData(json.total || 0);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      if (err.name !== "AbortError") {
+        console.error(err);
+      }
     }
   }, [npm, page]);
 
   useEffect(() => {
-    if (npm) fetchDetail();
+    detailRef.current = fetchDetail;
+    riwayatRef.current = fetchRiwayat;
+  }, [fetchDetail, fetchRiwayat]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    if (npm) fetchDetail(controller.signal);
+    return () => controller.abort();
   }, [fetchDetail, npm]);
 
   useEffect(() => {
-    if (npm) fetchRiwayat();
+    const controller = new AbortController();
+    if (npm) fetchRiwayat(controller.signal);
+    return () => controller.abort();
   }, [fetchRiwayat, npm, page]);
 
   // 📡 Real-time Socket.io listener untuk RFID & Riwayat Parkir
   useEffect(() => {
-    const socket = io("http://localhost:5000");
+    const socketHost = window.location.hostname === "localhost"
+      ? "http://localhost:5000"
+      : `http://${window.location.hostname}:5000`;
+
+    const socket = io(socketHost);
+
+    socket.on("connect", () => {
+      console.log("✅ Detail Page Socket Connected");
+    });
 
     // 1. Listen for RFID Scan (Registration)
     socket.on("rfid_scanned", (payload: any) => {
       console.log("📡 RFID Scan Received:", payload);
-      if (profil && payload.id_kendaraan === profil.id_kendaraan) {
-        setEditRfid(payload.kode_rfid);
-        alert("RFID Berhasil di-scan otomatis!");
-        fetchDetail();
-      }
+      if (detailRef.current) detailRef.current();
     });
 
     // 2. Listen for Entry/Exit (Log Parking)
     socket.on("parking_update", (payload: any) => {
       console.log("🚗 Parking activity detected:", payload);
-      // Refresh riwayat dan sisa kuota jika mahasiswa ini yang melakukan scan
-      // (Bisa juga refresh untuk semua jika ingin lebih aman)
-      fetchDetail();
-      fetchRiwayat();
+      if (detailRef.current) detailRef.current();
+      if (riwayatRef.current) riwayatRef.current();
     });
 
     return () => {
       socket.disconnect();
     };
-  }, [profil, fetchDetail, fetchRiwayat]);
+  }, []);
 
   const [scanLoading, setScanLoading] = useState(false);
 
@@ -136,7 +156,6 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
       });
 
       if (res.ok) {
-        alert("RFID berhasil diperbarui");
         fetchDetail();
       } else {
         const data = await res.json();
@@ -167,10 +186,8 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
 
       const data = await res.json();
       if (res.ok && data.status === "success") {
-        alert("Mode Scan Aktif! Silakan tempelkan kartu ke alat dalam 60 detik.");
-
-        // Opsional: Polling atau biarkan user refresh manual/otomatis
-        // Di sini kita biarkan user menunggu sampai alat selesai scan
+        // Mode Scan Aktif! Silakan tempelkan kartu ke alat dalam 60 detik.
+        // Alert dihapus sesuai permintaan (hanya muncul jika gagal)
       } else {
         alert(data.message || "Gagal mengaktifkan mode scan");
       }
@@ -195,7 +212,6 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
       });
 
       if (res.ok) {
-        alert("Kuota berhasil diperbarui");
         setEditKuota("");
         fetchDetail();
       } else {
@@ -221,7 +237,6 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
         body: JSON.stringify({ npm, status_akun: status }),
       });
       if (res.ok) {
-        alert("Status berhasil diperbarui");
         fetchDetail();
       }
     } catch (err) {
@@ -236,7 +251,6 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
         method: "DELETE",
       });
       if (res.ok) {
-        alert("Pengguna berhasil dihapus");
         router.push("/admin/pengguna-parkir");
       } else {
         const data = await res.json();

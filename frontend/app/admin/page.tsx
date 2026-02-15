@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import StatCard from "@/app/components/StatCard";
 import StatistikKendaraan from "@/app/components/statistik-kendaraan";
 import DataKendaraanParkir from "@/app/components/DataKendaraanParkir";
@@ -23,8 +23,11 @@ export default function AdminDashboardPage() {
 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
-  const [newSlot, setNewSlot] = useState<number>(0);
+  const [newSlot, setNewSlot] = useState<number | "">(0);
   const [updatingSlot, setUpdatingSlot] = useState<boolean>(false);
+
+  // Ref untuk menyimpan fungsi fetch terbaru agar tidak memicu reconnnect socket
+  const fetchRef = useRef<any>(null);
 
   const fetchSummary = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -55,9 +58,15 @@ export default function AdminDashboardPage() {
     }
   }, []);
 
+  // Update ref setiap kali fetchSummary berubah
+  useEffect(() => {
+    fetchRef.current = fetchSummary;
+  }, [fetchSummary]);
+
   const handleUpdateSlot = async () => {
-    if (newSlot < 0) {
-      alert("Jumlah slot tidak boleh negatif");
+    const slotValue = Number(newSlot);
+    if (newSlot === "" || isNaN(slotValue) || slotValue < 0) {
+      alert("Jumlah slot tidak valid");
       return;
     }
 
@@ -66,12 +75,11 @@ export default function AdminDashboardPage() {
       const res = await fetch("/api/admin/slot", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jumlah: newSlot }),
+        body: JSON.stringify({ jumlah: slotValue }),
       });
 
       const data = await res.json();
       if (res.ok) {
-        alert("Slot parkir berhasil diperbarui");
         fetchSummary();
       } else {
         alert(data.message || "Gagal memperbarui slot");
@@ -89,23 +97,40 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     const controller = new AbortController();
     fetchSummary(controller.signal);
+    return () => controller.abort();
+  }, [fetchSummary]);
 
-    // Setup Socket.io for dashboard updates
-    const socket = io("http://localhost:5000");
+  useEffect(() => {
+    // Dynamic Host for Socket.io
+    const socketHost = window.location.hostname === "localhost"
+      ? "http://localhost:5000"
+      : `http://${window.location.hostname}:5000`;
+
+    const socket = io(socketHost);
+
+    socket.on("connect", () => {
+      console.log("✅ Dashboard Socket Connected");
+    });
 
     socket.on("parking_update", (payload: any) => {
-      console.log("📊 Dashboard update received:", payload);
-      // Refresh summary stats in real-time
-      fetchSummary();
-      // Refresh chart
+      console.log("📊 Dashboard update received (parking):", payload);
+      if (fetchRef.current) fetchRef.current();
       setRefreshKey(prev => prev + 1);
     });
 
+    socket.on("user_update", (payload: any) => {
+      console.log("👥 Dashboard update received (user):", payload);
+      if (fetchRef.current) fetchRef.current();
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("❌ Dashboard Socket Error:", err);
+    });
+
     return () => {
-      controller.abort();
       socket.disconnect();
     };
-  }, [fetchSummary]);
+  }, []); // Dependency kosong
 
   if (loading) {
     return (
@@ -137,7 +162,7 @@ export default function AdminDashboardPage() {
               <input
                 type="number"
                 value={newSlot}
-                onChange={(e) => setNewSlot(parseInt(e.target.value) || 0)}
+                onChange={(e) => setNewSlot(e.target.value === "" ? "" : parseInt(e.target.value))}
                 className="w-16 rounded-md border border-gray-300 px-2 py-0.5 text-xs focus:border-[#1F3A93] focus:outline-none focus:ring-1 focus:ring-[#1F3A93]"
               />
               <button
