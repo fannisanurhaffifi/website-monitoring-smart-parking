@@ -20,7 +20,7 @@ const server = http.createServer(app);
 // Initialize Socket.io
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000", // Frontend URL
+    origin: "*", // Biarkan fleksibel untuk development
     methods: ["GET", "POST"],
   },
 });
@@ -45,7 +45,7 @@ app.disable("x-powered-by");
  */
 app.use(
   cors({
-    origin: "http://localhost:3000", // Next.js
+    origin: true, // Pantulkan origin request (fleksibel)
     credentials: true,
   })
 );

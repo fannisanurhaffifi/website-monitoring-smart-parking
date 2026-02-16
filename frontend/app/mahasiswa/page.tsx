@@ -12,6 +12,8 @@ type StatCardData = {
 };
 
 export default function MahasiswaHomePage() {
+  console.log("🏠 MahasiswaHomePage Component Rendered");
+
   const [loading, setLoading] = useState(true);
   const [statcard, setStatcard] = useState<StatCardData>({
     terisi: 0,
@@ -29,19 +31,20 @@ export default function MahasiswaHomePage() {
       const npm = localStorage.getItem("npm");
       if (!npm) return;
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/statcard/parkir?npm=${npm}`, {
+      const res = await fetch(`/api/statcard/parkir?npm=${npm}`, {
         cache: "no-store",
         signal
       });
 
       const result = await res.json();
+      console.log("📥 Statcard Data Received:", result);
 
       if (res.ok && result.success) {
         setStatcard(result.data);
       }
     } catch (error: any) {
       if (error.name !== "AbortError") {
-        console.error("Gagal mengambil statcard:", error);
+        console.error("❌ Gagal mengambil statcard:", error);
       }
     } finally {
       setLoading(false);
@@ -61,19 +64,54 @@ export default function MahasiswaHomePage() {
   // Real-time Update
   const [refreshKey, setRefreshKey] = useState(0);
   useEffect(() => {
+    console.log("🔌 Initializing socket connection...");
     const socketHost = window.location.hostname === "localhost"
       ? "http://localhost:5000"
       : `http://${window.location.hostname}:5000`;
 
-    const socket = io(socketHost);
+    console.log("🌐 Socket Host:", socketHost);
+    const socket = io(socketHost, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+    });
+
+    socket.on("connect", () => {
+      console.log("✅ Mahasiswa Socket Connected to:", socketHost);
+      console.log("🆔 Socket ID:", socket.id);
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.warn("⚠️ Socket Disconnected:", reason);
+    });
 
     socket.on("parking_update", (payload: any) => {
       console.log("🚗 Mahasiswa Dashboard update:", payload);
-      if (fetchRef.current) fetchRef.current();
+      // Re-fetch statcard
+      if (fetchRef.current) {
+        console.log("🔄 Fetching updated data...");
+        fetchRef.current();
+      }
+      // Re-fetch statistik kendaraan melalui refreshKey
       setRefreshKey(prev => prev + 1);
     });
 
+    socket.on("user_update", (payload: any) => {
+      console.log("👥 Mahasiswa User update:", payload);
+      if (fetchRef.current) {
+        console.log("🔄 Fetching updated user data...");
+        fetchRef.current();
+      }
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("❌ Mahasiswa Socket Error:", err.message);
+      console.error("🔍 Error Details:", err);
+    });
+
     return () => {
+      console.log("🔌 Disconnecting socket...");
       socket.disconnect();
     };
   }, []);

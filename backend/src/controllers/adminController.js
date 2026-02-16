@@ -638,6 +638,11 @@ const updateKuotaParkir = async (req, res) => {
       [batas_parkir, npm || null]
     );
 
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("user_update", { action: "KUOTA_UPDATE", npm });
+    }
+
     return res.status(200).json({
       status: "success",
       message: npm

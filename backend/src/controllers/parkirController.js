@@ -11,6 +11,7 @@ const { query } = require("../config/database");
 const parkirScan = async (req, res) => {
   try {
     const { kode_rfid, gate } = req.body;
+    console.log(`🚗 SCAN RECEIVED: RFID=${kode_rfid}, Gate=${gate}`);
 
     if (!kode_rfid || !gate) {
       return res.json({
@@ -26,29 +27,56 @@ const parkirScan = async (req, res) => {
       });
     }
 
-    const uid = kode_rfid.replace(/[^A-Fa-f0-9]/g, "").toUpperCase();
+    const uid = kode_rfid.trim().toUpperCase();
+    console.log("🔍 Cleaned RFID UID:", uid);
 
     /* ======================
        1️⃣ VALIDASI RFID
     ====================== */
-    const rfid = await query(
-      `
-      SELECT r.id_kendaraan, k.npm
+    const rfidQuery = `
+      SELECT r.id_kendaraan, k.npm, r.status_rfid, p.status_akun
       FROM rfid r
       JOIN kendaraan k ON r.id_kendaraan = k.id_kendaraan
       JOIN pengguna p ON k.npm = p.npm
       WHERE r.kode_rfid = ?
-        AND r.status_rfid = TRUE
-        AND p.status_akun = 1
       LIMIT 1
-      `,
-      [uid]
-    );
+    `;
+
+    console.log("🔍 Executing RFID validation query with UID:", uid);
+    const rfid = await query(rfidQuery, [uid]);
+
+    console.log("🔍 RFID Query Result:", rfid);
 
     if (rfid.length === 0) {
+      console.error("❌ RFID not found in database");
       return res.json({
         izin: false,
         message: "RFID tidak valid atau akun tidak aktif",
+      });
+    }
+
+    // Check individual conditions
+    const rfidData = rfid[0];
+    console.log("🔍 RFID Data:", {
+      id_kendaraan: rfidData.id_kendaraan,
+      npm: rfidData.npm,
+      status_rfid: rfidData.status_rfid,
+      status_akun: rfidData.status_akun
+    });
+
+    if (!rfidData.status_rfid) {
+      console.error("❌ RFID is not active (status_rfid = false)");
+      return res.json({
+        izin: false,
+        message: "RFID tidak aktif",
+      });
+    }
+
+    if (rfidData.status_akun !== 1) {
+      console.error("❌ User account is not active (status_akun != 1)");
+      return res.json({
+        izin: false,
+        message: "Akun pengguna tidak aktif",
       });
     }
 
@@ -122,21 +150,16 @@ const parkirScan = async (req, res) => {
         [logAktif[0].id_log]
       );
 
-      await query("UPDATE slot_parkir SET jumlah = jumlah + 1");
-
-      // ⬅️ HITUNG KUOTA (1 PARKIR SELESAI)
-      await query(
-        `
-        UPDATE kuota_parkir
-        SET jumlah_terpakai = jumlah_terpakai + 1
-        WHERE id_kuota = ?
-        `,
-        [kuota.id_kuota]
-      );
+      await query("UPDATE slot_parkir SET jumlah = jumlah + 1 WHERE jumlah >= 0");
 
       // Emit update real-time
       const io = req.app.get("io");
-      io.emit("parking_update", { action: "KELUAR", id_kendaraan });
+      if (io) {
+        console.log("📡 Emitting parking_update (KELUAR):", { action: "KELUAR", id_kendaraan });
+        io.emit("parking_update", { action: "KELUAR", id_kendaraan });
+      } else {
+        console.error("❌ Socket.io instance not found!");
+      }
 
       return res.json({
         izin: true,
@@ -214,11 +237,26 @@ const parkirScan = async (req, res) => {
       [id_kendaraan]
     );
 
-    await query("UPDATE slot_parkir SET jumlah = jumlah - 1");
+    await query("UPDATE slot_parkir SET jumlah = jumlah - 1 WHERE jumlah > 0");
+
+    // ⬅️ HITUNG KUOTA (PENGGUNAAN DIMULAI SAAT MASUK)
+    await query(
+      `
+      UPDATE kuota_parkir
+      SET jumlah_terpakai = jumlah_terpakai + 1
+      WHERE id_kuota = ?
+      `,
+      [kuota.id_kuota]
+    );
 
     // Emit update real-time
     const io = req.app.get("io");
-    io.emit("parking_update", { action: "MASUK", id_kendaraan });
+    if (io) {
+      console.log("📡 Emitting parking_update (MASUK):", { action: "MASUK", id_kendaraan, npm });
+      io.emit("parking_update", { action: "MASUK", id_kendaraan, npm });
+    } else {
+      console.error("❌ Socket.io instance not found!");
+    }
 
     return res.json({
       izin: true,
