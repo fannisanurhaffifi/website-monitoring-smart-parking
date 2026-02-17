@@ -150,7 +150,7 @@ const parkirScan = async (req, res) => {
         [logAktif[0].id_log]
       );
 
-      await query("UPDATE slot_parkir SET jumlah = jumlah + 1 WHERE jumlah >= 0");
+      // Slot update removed because it is now dynamic (total_capacity - active_logs)
 
       // Emit update real-time
       const io = req.app.get("io");
@@ -179,8 +179,17 @@ const parkirScan = async (req, res) => {
       });
     }
 
-    const [slot] = await query("SELECT jumlah FROM slot_parkir LIMIT 1");
-    if (!slot || slot.jumlah <= 0) {
+    // ===== CHECK GLOBAL SLOT AVAILABILITY (DYNAMIC) =====
+    const [slotResults, terisiResults] = await Promise.all([
+      query("SELECT COALESCE(SUM(jumlah), 0) AS total FROM slot_parkir"),
+      query("SELECT COUNT(*) AS total FROM log_parkir WHERE status_parkir = 'MASUK'"),
+    ]);
+
+    const total_slot = slotResults[0]?.total || 0;
+    const terisi_current = terisiResults[0]?.total || 0;
+    const tersedia = total_slot - terisi_current;
+
+    if (tersedia <= 0) {
       return res.json({
         izin: false,
         message: "Slot parkir penuh",
@@ -237,7 +246,7 @@ const parkirScan = async (req, res) => {
       [id_kendaraan]
     );
 
-    await query("UPDATE slot_parkir SET jumlah = jumlah - 1 WHERE jumlah > 0");
+    // Slot update removed (now dynamic)
 
     // ⬅️ HITUNG KUOTA (PENGGUNAAN DIMULAI SAAT MASUK)
     await query(
