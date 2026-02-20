@@ -77,7 +77,6 @@ const verifikasiPengguna = async (req, res) => {
       [status_akun ?? 1, npm]
     );
 
-    // Kirim email verifikasi jika diaktifkan (status_akun === 1)
 
     // Kirim email verifikasi jika diaktifkan (status_akun === 1)
     if (status_akun === 1) {
