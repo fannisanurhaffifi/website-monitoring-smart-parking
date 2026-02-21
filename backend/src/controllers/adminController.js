@@ -79,21 +79,28 @@ const verifikasiPengguna = async (req, res) => {
 
     // Kirim email verifikasi jika diaktifkan (status_akun === 1)
 
-    // Kirim email verifikasi jika diaktifkan (status_akun === 1)
+    // =====================================================
+    // Jika diverifikasi (status_akun === 1)
+    // 🔥 LOGIC KUOTA DIGANTI MASS INSERT
+    // =====================================================
     if (status_akun === 1) {
-      // ✅ JARING PENGAMAN: PASTIKAN USER PUNYA KUOTA (Jika belum ada)
-      const existingKuota = await query(
-        "SELECT id_kuota FROM kuota_parkir WHERE npm = ? LIMIT 1",
-        [npm]
-      );
 
-      if (existingKuota.length === 0) {
-        await query(
-          "INSERT INTO kuota_parkir (npm, batas_parkir, jumlah_terpakai) VALUES (?, 30, 0)",
-          [npm]
-        );
-        console.log(`✅ Kuota awal 30 diberikan untuk NPM ${npm}`);
-      }
+      await query(`
+        INSERT INTO kuota_parkir
+        (npm, id_kendaraan, periode_bulan, batas_parkir, jumlah_terpakai, last_reset_date)
+        SELECT 
+          p.npm,
+          k.id_kendaraan,
+          DATE_FORMAT(CURDATE(), '%Y-%m'),
+          30,
+          0,
+          CURDATE()
+        FROM kendaraan k
+        JOIN pengguna p ON p.npm = k.npm
+        LEFT JOIN kuota_parkir q ON q.id_kendaraan = k.id_kendaraan
+        WHERE p.npm = ?
+        AND q.id_kendaraan IS NULL
+      `, [npm]);
 
       try {
         await sendVerificationEmail(user[0].email);
@@ -102,10 +109,15 @@ const verifikasiPengguna = async (req, res) => {
       }
     }
 
-    // Kirim email penolakan jika ditolak (status_akun === 3)
+    // =====================================================
+    // Jika ditolak (status_akun === 3)
+    // =====================================================
     if (status_akun === 3) {
       try {
-        await sendRejectionEmail(user[0].email, user[0].nama || "Mahasiswa");
+        await sendRejectionEmail(
+          user[0].email,
+          user[0].nama || "Mahasiswa"
+        );
       } catch (emailErr) {
         console.error("Email penolakan gagal:", emailErr.message);
       }
@@ -115,7 +127,7 @@ const verifikasiPengguna = async (req, res) => {
     if (status_akun === 1) successMessage = "Akun berhasil diverifikasi";
     if (status_akun === 3) successMessage = "Pendaftaran berhasil ditolak";
 
-    // 📡 Real-time update untuk Admin
+    // 📡 Real-time update
     const io = req.app.get("io");
     if (io) io.emit("user_update", { action: "VERIFY", npm, status: status_akun });
 
@@ -132,7 +144,6 @@ const verifikasiPengguna = async (req, res) => {
     });
   }
 };
-
 
 /* =====================================================
    LIST DATA PENGGUNA
@@ -619,26 +630,43 @@ const exportParkirPDF = async (req, res) => {
 };
 
 /* =====================================================
-   UPDATE KUOTA PARKIR (INDIVIDUAL / GLOBAL)
+   UPDATE KUOTA PARKIR (INDIVIDUAL)
 ===================================================== */
 const updateKuotaParkir = async (req, res) => {
   try {
     const { batas_parkir, npm } = req.body;
-    console.log("➡️ UPDATE KUOTA:", { npm, batas_parkir });
 
-    if (batas_parkir === undefined) {
+    if (!npm) {
       return res.status(400).json({
         status: "error",
-        message: "Batas parkir wajib diisi",
+        message: "NPM wajib dikirim",
       });
     }
 
-    // Insert as new record (history logic remains)
-    // Jika npm ada, maka ini kuota individu. Jika NULL, maka kuota global.
-    await query(
-      "INSERT INTO kuota_parkir (batas_parkir, npm) VALUES (?, ?)",
-      [batas_parkir, npm || null]
-    );
+    if (
+      batas_parkir === undefined ||
+      isNaN(batas_parkir) ||
+      batas_parkir < 0
+    ) {
+      return res.status(400).json({
+        status: "error",
+        message: "Batas parkir tidak valid",
+      });
+    }
+
+    const result = await query(`
+      UPDATE kuota_parkir q
+      JOIN kendaraan k ON q.id_kendaraan = k.id_kendaraan
+      SET q.batas_parkir = ?
+      WHERE k.npm = ?
+    `, [batas_parkir, npm]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        status: "error",
+        message: "Kuota tidak ditemukan untuk pengguna ini",
+      });
+    }
 
     const io = req.app.get("io");
     if (io) {
@@ -647,10 +675,9 @@ const updateKuotaParkir = async (req, res) => {
 
     return res.status(200).json({
       status: "success",
-      message: npm
-        ? `Kuota parkir untuk NPM ${npm} berhasil diperbarui`
-        : "Kuota parkir global berhasil diperbarui",
+      message: `Kuota parkir NPM ${npm} berhasil diperbarui`,
     });
+
   } catch (err) {
     console.error("updateKuotaParkir:", err);
     return res.status(500).json({
